@@ -17,6 +17,7 @@ interface HeaderHUDProps {
   onOpenKanban: () => void;
   onOpenRoster: () => void;
   activeAgentsCount: number;
+  isConnected?: boolean;
 }
 
 export default function HeaderHUD({
@@ -25,6 +26,7 @@ export default function HeaderHUD({
   onOpenKanban,
   onOpenRoster,
   activeAgentsCount,
+  isConnected = false,
 }: HeaderHUDProps) {
   return (
     <header className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
@@ -43,9 +45,14 @@ export default function HeaderHUD({
             </span>
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-cyan-400'
+              }`}
+              title={isConnected ? 'Live WebSocket Gateway Connected' : 'Running Standalone / Offline'}
+            />
             <span className="text-xs text-slate-400 font-medium">
-              E-Commerce Multi-Platform (Next.js & RN)
+              {isConnected ? 'Gateway Aktif (WebSocket :4000)' : 'Client Ready (Multi-Agent SDLC)'}
             </span>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import HeaderHUD from '../components/HeaderHUD';
 import InspectorDrawer from '../components/InspectorDrawer';
@@ -15,6 +15,7 @@ import {
   RoomZone,
 } from '@nexusdev/shared';
 import { OfficeScene } from '../phaser/scenes/OfficeScene';
+import { useSocketStudio } from '../hooks/useSocketStudio';
 
 // Dynamically import Phaser canvas with SSR disabled
 const OfficeCanvas = dynamic(() => import('../components/OfficeCanvas'), {
@@ -43,11 +44,33 @@ export default function StudioPage() {
   const [isKanbanOpen, setIsKanbanOpen] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
 
+  // Real-time WebSocket connection to Backend Orchestrator
+  const {
+    isConnected,
+    agents,
+    tasks,
+    pendingApproval,
+    sendPlayerMove,
+    callMeeting,
+    submitHITLDecision,
+  } = useSocketStudio();
+
   // Helper to access scene bridge
   const getScene = (): OfficeScene | undefined => {
     if (typeof window === 'undefined') return undefined;
     return (window as unknown as { __NEXUS_SCENE__?: OfficeScene }).__NEXUS_SCENE__;
   };
+
+  // If a critical HITL approval is requested, open Meeting modal automatically
+  useEffect(() => {
+    if (pendingApproval) {
+      setIsMeetingOpen(true);
+      const scene = getScene();
+      if (scene) {
+        scene.callMeeting(`Permintaan Persetujuan CEO: ${pendingApproval.title}`);
+      }
+    }
+  }, [pendingApproval]);
 
   const handleAgentClick = useCallback((agent: AgentProfile) => {
     setSelectedAgent(agent);
@@ -56,6 +79,13 @@ export default function StudioPage() {
   const handleRoomEnter = useCallback((room: RoomZone) => {
     setCurrentRoom(room);
   }, []);
+
+  const handlePlayerMove = useCallback(
+    (pos: { x: number; y: number }) => {
+      sendPlayerMove({ x: pos.x, y: pos.y, direction: 'down' });
+    },
+    [sendPlayerMove]
+  );
 
   const handleJumpToRoom = (roomId: RoomId) => {
     const scene = getScene();
@@ -76,6 +106,7 @@ export default function StudioPage() {
     if (scene) {
       scene.callMeeting('Persetujuan Arsitektur & Sinkronisasi Sprint 1');
     }
+    callMeeting('Persetujuan Arsitektur & Sinkronisasi Sprint 1');
     setIsMeetingOpen(true);
   };
 
@@ -95,13 +126,15 @@ export default function StudioPage() {
         onOpenMeeting={handleOpenMeeting}
         onOpenKanban={() => setIsKanbanOpen(true)}
         onOpenRoster={() => setIsRosterOpen(true)}
-        activeAgentsCount={Object.keys(INITIAL_AGENTS_ROSTER).length - 1} // minus CEO
+        activeAgentsCount={Object.keys(agents || INITIAL_AGENTS_ROSTER).length - 1} // minus CEO
+        isConnected={isConnected}
       />
 
       {/* 2. 2D Spatial Phaser Viewport */}
       <OfficeCanvas
         onAgentClick={handleAgentClick}
         onRoomEnter={handleRoomEnter}
+        onPlayerMove={handlePlayerMove}
         onMeetingTriggered={() => setIsMeetingOpen(true)}
       />
 
@@ -111,7 +144,7 @@ export default function StudioPage() {
       {/* 4. Inspector Drawer (Agent Details, Live Code, 1-on-1 Chat) */}
       {selectedAgent && (
         <InspectorDrawer
-          agent={selectedAgent}
+          agent={agents[selectedAgent.id] || selectedAgent}
           onClose={() => setSelectedAgent(null)}
           onJumpToDesk={handleJumpToAgent}
         />
@@ -122,7 +155,7 @@ export default function StudioPage() {
         isOpen={isKanbanOpen}
         onClose={() => setIsKanbanOpen(false)}
         onSelectAgent={(role) => {
-          const profile = INITIAL_AGENTS_ROSTER[role];
+          const profile = (agents || INITIAL_AGENTS_ROSTER)[role];
           if (profile) setSelectedAgent(profile);
         }}
       />

@@ -1,0 +1,92 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Project {
+  id          String       @id @default(uuid())
+  name        String
+  description String
+  status      String       @default("PLANNING") // PLANNING, IN_PROGRESS, TESTING, COMPLETED, PAUSED
+  platform    String       @default("FULLSTACK") // WEB, MOBILE, FULLSTACK
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  tasks       Task[]
+  artifacts   Artifact[]
+  meetings    MeetingSession[]
+  approvals   ApprovalGate[]
+  agentLogs   AgentLog[]
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  projectId   String
+  title       String
+  description String
+  assignee    String       // AGT-FE, AGT-BE, AGT-MOB, etc.
+  status      String       @default("TODO") // TODO, IN_PROGRESS, IN_REVIEW, DONE, ESCALATED
+  priority    String       @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  iteration   Int          @default(0) // Anti-loop counter
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Artifact {
+  id          String       @id @default(uuid())
+  projectId   String
+  name        String
+  type        String       // SPEC, CODE, DESIGN_TOKEN, TEST_REPORT, DOCKERFILE
+  filePath    String
+  content     String?      // Inline preview text/markdown/code
+  createdAt   DateTime     @default(now())
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model MeetingSession {
+  id             String       @id @default(uuid())
+  projectId      String
+  topic          String
+  summary        String?
+  transcriptJson String       @default("[]") // JSON string of ChatMessage[]
+  status         String       @default("ACTIVE") // ACTIVE, CONCLUDED
+  createdAt      DateTime     @default(now())
+
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ApprovalGate {
+  id          String       @id @default(uuid())
+  projectId   String
+  type        String       // ARCHITECTURE, STAGING_DEPLOY, BUG_ESCALATION
+  title       String
+  description String
+  requestedBy String       // AGT-CTO, AGT-PM, etc.
+  diffPayload String?      // JSON string of diff
+  status      String       @default("PENDING") // PENDING, APPROVED, REJECTED
+  feedback    String?
+  createdAt   DateTime     @default(now())
+  resolvedAt  DateTime?
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AgentLog {
+  id          String       @id @default(uuid())
+  projectId   String
+  agentId     String
+  level       String       @default("INFO") // INFO, WARN, ERROR, DEBUG
+  action      String
+  message     String
+  metadata    String?      // JSON string
+  createdAt   DateTime     @default(now())
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
