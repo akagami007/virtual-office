@@ -246,6 +246,8 @@ export default function MeetingRoomModal({
                 type="text"
                 value={inputMsg}
                 onChange={(e) => setInputMsg(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                onKeyUp={(e) => e.stopPropagation()}
                 placeholder="Berikan arahan atau instruksi langsung kepada tim rapat..."
                 className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />

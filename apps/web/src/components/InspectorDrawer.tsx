@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Code2,
@@ -13,7 +13,56 @@ import {
   Compass,
   Smartphone,
 } from 'lucide-react';
-import { AgentProfile, AgentState } from '@nexusdev/shared';
+import { AgentProfile, AgentRole, AgentState } from '@nexusdev/shared';
+import { OfficeScene } from '../phaser/scenes/OfficeScene';
+
+const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000';
+
+interface ChatMessageItem {
+  sender: string;
+  text: string;
+  time: string;
+}
+
+function getInitialGreeting(agent: AgentProfile): ChatMessageItem {
+  if (agent.id === 'AGT-PA') {
+    return {
+      sender: agent.name,
+      text: 'Halo CEO! Saya Anggi, Personal Assistant Anda. Jadwal harian, agenda rapat lintas divisi, dan berkas briefing eksekutif sudah saya siapkan. Apa jadwal atau kebutuhan yang ingin Anda atur sekarang?',
+      time: 'Baru saja',
+    };
+  }
+  return {
+    sender: agent.name,
+    text: `Halo CEO! Saya ${agent.name} (${agent.title}). Saat ini saya sedang fokus pada: "${agent.currentTask || 'tugas sprint aktif'}". Ada instruksi khusus untuk saya?`,
+    time: 'Baru saja',
+  };
+}
+
+function generateRoleFallbackReply(agent: AgentProfile, prompt: string): string {
+  switch (agent.id as AgentRole) {
+    case 'AGT-PA':
+      return `Siap, CEO! Terkait permintaan Anda: "${prompt}"\n• Jadwal & kalender eksekutif Anda telah saya perbarui.\n• Undangan koordinasi dan dokumen briefing terkait sudah saya distribusikan ke kepala divisi.\n• Saya akan mengingatkan Anda 15 menit sebelum agenda dimulai. Ada kebutuhan lain yang perlu saya siapkan?`;
+    case 'AGT-CTO':
+      return `Siap CEO. Terkait "${prompt}", saya akan mengevaluasi dampaknya terhadap arsitektur sistem, kontrak OpenAPI, dan keamanan TLS/Database sebelum memberikan sign-off teknis.`;
+    case 'AGT-PM':
+      return `Dicatat CEO! Permintaan "${prompt}" sudah saya pecah ke dalam Sprint Backlog dan saya sinkronkan dengan papan Kanban tim.`;
+    case 'AGT-UIUX':
+      return `Siap CEO! Untuk "${prompt}", saya sedang menyiapkan komponen design system, palet warna, dan wireframe responsifnya di Figma & Tailwind.`;
+    case 'AGT-FE':
+      return `Siap CEO! Saya akan mengimplementasikan "${prompt}" pada komponen Next.js App Router dengan optimasi rendering dan state yang bersih.`;
+    case 'AGT-BE':
+      return `Siap CEO! Endpoint API, validasi skema, dan query database untuk "${prompt}" segera saya bangun dan uji.`;
+    case 'AGT-MOB':
+      return `Siap CEO! Fitur "${prompt}" segera saya integrasikan ke modul React Native Expo & Flutter agar berjalan mulus di iOS dan Android.`;
+    case 'AGT-QA':
+      return `Siap CEO! Saya akan menyusun skenario automated test Playwright & Jest untuk memverifikasi "${prompt}" bebas dari bug regresi.`;
+    case 'AGT-OPS':
+      return `Siap CEO! Konfigurasi container Docker, pipeline CI/CD, dan monitoring untuk "${prompt}" segera saya terapkan di server.`;
+    default:
+      return `Siap CEO! Instruksi "${prompt}" telah saya catat dan segera saya eksekusi.`;
+  }
+}
 
 interface InspectorDrawerProps {
   agent: AgentProfile | null;
@@ -30,41 +79,91 @@ export default function InspectorDrawer({
 }: InspectorDrawerProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'code' | 'chat'>('profile');
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<Array<{ sender: string; text: string; time: string }>>([
-    {
-      sender: agent ? agent.name : 'Agent',
-      text: `Halo CEO! Saya sedang fokus pada: ${agent?.currentTask || 'tugas saat ini'}. Ada instruksi khusus untuk saya?`,
-      time: 'Baru saja',
-    },
-  ]);
+  const [isSending, setIsSending] = useState(false);
+  const [messagesByAgent, setMessagesByAgent] = useState<Record<string, ChatMessageItem[]>>({});
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // Ensure current agent has an initialized message thread
+  useEffect(() => {
+    if (!agent) return;
+    setMessagesByAgent((prev) => {
+      if (prev[agent.id]) return prev;
+      return {
+        ...prev,
+        [agent.id]: [getInitialGreeting(agent)],
+      };
+    });
+  }, [agent]);
+
+  // Auto-focus chat input when switching to 'chat' tab
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      const timer = setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, agent?.id]);
 
   if (!agent) return null;
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
+  const currentMessages = messagesByAgent[agent.id] || [getInitialGreeting(agent)];
 
-    const userMsg = {
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isSending) return;
+
+    const inputCopy = chatInput.trim();
+    const userMsg: ChatMessageItem = {
       sender: 'You (CEO)',
-      text: chatInput,
+      text: inputCopy,
       time: 'Sekarang',
     };
 
-    setMessages((prev) => [...prev, userMsg]);
-    const inputCopy = chatInput;
+    setMessagesByAgent((prev) => ({
+      ...prev,
+      [agent.id]: [...(prev[agent.id] || [getInitialGreeting(agent)]), userMsg],
+    }));
     setChatInput('');
+    setIsSending(true);
 
-    // Simulated responsive feedback from agent
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
+    let replyText = '';
+    try {
+      const res = await fetch(`${SERVER_URL}/api/agents/${agent.id}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: inputCopy }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        replyText = data.reply;
+      } else {
+        replyText = generateRoleFallbackReply(agent, inputCopy);
+      }
+    } catch {
+      replyText = generateRoleFallbackReply(agent, inputCopy);
+    }
+
+    setMessagesByAgent((prev) => ({
+      ...prev,
+      [agent.id]: [
+        ...(prev[agent.id] || []),
         {
           sender: agent.name,
-          text: `Siap CEO! Saya telah mencatat instruksi: "${inputCopy}". Saya akan prioritaskan pada iterasi modul berikutnya.`,
+          text: replyText,
           time: 'Baru saja',
         },
-      ]);
-    }, 700);
+      ],
+    }));
+    setIsSending(false);
+
+    // Show speech bubble on 2D canvas if scene is active
+    if (typeof window !== 'undefined') {
+      const scene = (window as unknown as { __NEXUS_SCENE__?: OfficeScene }).__NEXUS_SCENE__;
+      if (scene && typeof scene.showSpeechBubble === 'function') {
+        scene.showSpeechBubble(agent.id, replyText.slice(0, 90), 4000);
+      }
+    }
   };
 
   const getStatusColor = (state: AgentState) => {
@@ -237,11 +336,11 @@ export default function InspectorDrawer({
 
         {activeTab === 'chat' && (
           <div className="flex flex-col h-full space-y-3">
-            <div className="flex-1 space-y-3 overflow-y-auto max-h-[360px] pr-1">
-              {messages.map((msg, i) => (
+            <div className="flex-1 space-y-3 overflow-y-auto max-h-[340px] pr-1">
+              {currentMessages.map((msg, i) => (
                 <div
                   key={i}
-                  className={`p-3 rounded-xl text-xs leading-relaxed ${
+                  className={`p-3 rounded-xl text-xs leading-relaxed whitespace-pre-line ${
                     msg.sender === 'You (CEO)'
                       ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-100 ml-6'
                       : 'bg-slate-800/60 border border-slate-700/50 text-slate-200 mr-6'
@@ -254,19 +353,55 @@ export default function InspectorDrawer({
                   <p>{msg.text}</p>
                 </div>
               ))}
+              {isSending && (
+                <div className="p-3 rounded-xl text-xs bg-slate-800/40 border border-slate-700/40 text-slate-400 mr-6 animate-pulse">
+                  {agent.name} sedang menyiapkan balasan...
+                </div>
+              )}
             </div>
 
-            <form onSubmit={handleSendMessage} className="pt-2 flex gap-2">
+            {/* Quick Prompt Suggestions */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {(agent.id === 'AGT-PA'
+                ? [
+                    'Atur jadwal rapat hari ini',
+                    'Siapkan briefing eksekutif',
+                    'Saring prioritas mendesak CEO',
+                  ]
+                : [
+                    'Laporkan progres modul saat ini',
+                    'Prioritaskan tugas sprint utama',
+                  ]
+              ).map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    setChatInput(preset);
+                    chatInputRef.current?.focus();
+                  }}
+                  className="text-[10px] px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition-colors"
+                >
+                  + {preset}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSendMessage} className="pt-1 flex gap-2">
               <input
+                ref={chatInputRef}
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder={`Instruksikan ${agent.name}...`}
+                onKeyDown={(e) => e.stopPropagation()}
+                onKeyUp={(e) => e.stopPropagation()}
+                placeholder={`Ketik pesan untuk ${agent.name} (bebas pakai huruf W, A, S, D)...`}
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               <button
                 type="submit"
-                className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-3 py-2 text-xs font-semibold flex items-center justify-center transition-colors shadow-lg shadow-indigo-600/30"
+                disabled={isSending}
+                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl px-3 py-2 text-xs font-semibold flex items-center justify-center transition-colors shadow-lg shadow-indigo-600/30"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>

@@ -100,6 +100,43 @@ app.get('/api/agents', (req, res) => {
   res.json(Object.values(agentsRoster));
 });
 
+app.post('/api/agents/:agentId/chat', async (req, res) => {
+  try {
+    const agentId = req.params.agentId as AgentRole;
+    const { message } = req.body;
+    const profile = agentsRoster[agentId];
+
+    if (!profile) {
+      return res.status(404).json({ error: `Agent ${agentId} not found` });
+    }
+    if (!message || !String(message).trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const llm = getLLMProvider();
+    const reply = await llm.generateText({
+      agentRole: agentId,
+      prompt: String(message),
+    });
+
+    // Emit speech bubble and activity update to connected 2D canvases
+    io.emit('agent:speech', {
+      agentId,
+      message: reply.slice(0, 140),
+      durationMs: 4500,
+    });
+
+    res.json({
+      agentId,
+      agentName: profile.name,
+      reply,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to process agent chat' });
+  }
+});
+
 // Workspace Inspection & Sandbox Execution Endpoints
 app.get('/api/workspaces/:projectId/files', async (req, res) => {
   try {

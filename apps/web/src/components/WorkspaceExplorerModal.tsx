@@ -407,6 +407,8 @@ export default function WorkspaceExplorerModal({
                       type="text"
                       value={cliCommand}
                       onChange={(e) => setCliCommand(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onKeyUp={(e) => e.stopPropagation()}
                       placeholder="Masukkan perintah (misal: npm test, node -v, ls)..."
                       className="flex-1 bg-transparent text-white focus:outline-none text-xs font-mono"
                     />

@@ -77,6 +77,16 @@ export default function StudioPage() {
     }
   }, [pendingApproval]);
 
+  // Block Phaser keyboard & canvas walk when a full-screen modal is open
+  useEffect(() => {
+    const isModalOpen =
+      isMeetingOpen || isKanbanOpen || isRosterOpen || isWorkspaceOpen || isMobileSimulatorOpen;
+    const scene = getScene();
+    if (scene && typeof scene.setKeyboardBlocked === 'function') {
+      scene.setKeyboardBlocked(isModalOpen);
+    }
+  }, [isMeetingOpen, isKanbanOpen, isRosterOpen, isWorkspaceOpen, isMobileSimulatorOpen]);
+
   const handleAgentClick = useCallback((agent: AgentProfile) => {
     setSelectedAgent(agent);
   }, []);

@@ -35,6 +35,7 @@ export class OfficeScene extends Phaser.Scene {
   }> = new Map();
 
   private isMeetingActive: boolean = false;
+  private isKeyboardBlocked: boolean = false;
   private currentRoom: RoomId | null = null;
   private callbacks: SceneCallbacks = {};
 
@@ -50,6 +51,19 @@ export class OfficeScene extends Phaser.Scene {
 
   public setCallbacks(callbacks: SceneCallbacks) {
     this.callbacks = callbacks;
+  }
+
+  public setKeyboardBlocked(blocked: boolean) {
+    this.isKeyboardBlocked = blocked;
+    if (blocked) {
+      this.targetPosition = null;
+      if (this.player && this.player.body) {
+        this.player.setVelocity(0, 0);
+      }
+      if (this.input && this.input.keyboard) {
+        this.input.keyboard.resetKeys();
+      }
+    }
   }
 
   public preload() {
@@ -214,9 +228,9 @@ export class OfficeScene extends Phaser.Scene {
     for (let x = 0; x < 1200; x += 32) {
       for (let y = 0; y < 750; y += 32) {
         // Boardroom area gets luxury carpet
-        if (x >= 550 && x <= 870 && y >= 90 && y <= 330) {
+        if (x >= 640 && x <= 920 && y >= 95 && y <= 405) {
           this.add.image(x + 16, y + 16, 'tile_carpet');
-        } else if (x >= 900 && y >= 90 && y <= 450) {
+        } else if (x >= 930 && y >= 95 && y <= 405) {
           // QA Lab & DevOps gets tech grid
           this.add.image(x + 16, y + 16, 'tile_tech');
         } else {
@@ -235,16 +249,16 @@ export class OfficeScene extends Phaser.Scene {
 
       // Room Header Label
       const label = this.add.text(
-        room.bounds.x + 12,
-        room.bounds.y + 10,
+        room.bounds.x + 10,
+        room.bounds.y + 8,
         room.name.toUpperCase(),
         {
-          fontSize: '11px',
+          fontSize: '10px',
           color: room.color,
           fontStyle: 'bold',
           fontFamily: 'monospace',
           backgroundColor: '#0f172aee',
-          padding: { x: 6, y: 3 },
+          padding: { x: 5, y: 3 },
         }
       );
       label.setDepth(2);
@@ -252,28 +266,27 @@ export class OfficeScene extends Phaser.Scene {
 
     // 3. Furniture Placement
     // Boardroom: Conference Table in center
-    const confTable = this.add.image(710, 210, 'furniture_conf_table');
+    const confTable = this.add.image(780, 250, 'furniture_conf_table');
     confTable.setDepth(2);
 
     // DevOps: Server Racks
-    this.add.image(950, 340, 'furniture_server').setDepth(2);
-    this.add.image(1000, 340, 'furniture_server').setDepth(2);
-    this.add.image(1050, 340, 'furniture_server').setDepth(2);
+    this.add.image(975, 345, 'furniture_server').setDepth(2);
+    this.add.image(1115, 345, 'furniture_server').setDepth(2);
 
     // Whiteboard in Design Studio
     const gWb = this.add.graphics();
     gWb.fillStyle(0xf8fafc, 0.9);
-    gWb.fillRoundedRect(160, 150, 90, 8, 2);
+    gWb.fillRoundedRect(95, 145, 95, 8, 2);
     gWb.lineStyle(2, 0x475569, 1);
-    gWb.strokeRoundedRect(160, 150, 90, 8, 2);
+    gWb.strokeRoundedRect(95, 145, 95, 8, 2);
     gWb.setDepth(2);
 
     // Lounge: Sofa and Water cooler
     const gLounge = this.add.graphics();
     gLounge.fillStyle(0x7c3aed, 0.8);
-    gLounge.fillRoundedRect(680, 540, 100, 30, 6);
+    gLounge.fillRoundedRect(710, 540, 100, 30, 6);
     gLounge.fillStyle(0x0284c7, 1);
-    gLounge.fillCircle(820, 555, 10); // Water dispenser
+    gLounge.fillCircle(860, 555, 10); // Water dispenser
     gLounge.setDepth(2);
   }
 
@@ -408,35 +421,81 @@ export class OfficeScene extends Phaser.Scene {
   // ==========================================
   // Controls & Pathfinding
   // ==========================================
+  private isTypingInInput(): boolean {
+    if (typeof document === 'undefined') return false;
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName.toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if ((el as HTMLElement).isContentEditable) return true;
+    return false;
+  }
+
   private setupControls() {
     if (!this.input.keyboard) return;
 
-    this.cursors = this.input.keyboard.createCursorKeys();
+    // Crucial: Disable Phaser global key capture so W, A, S, D, Space, and Arrows
+    // never call event.preventDefault() when typing inside HTML <input> or <textarea>
+    this.input.keyboard.disableGlobalCapture();
+
+    this.cursors = {
+      up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP, false),
+      down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN, false),
+      left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT, false),
+      right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT, false),
+      space: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE, false),
+      shift: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT, false),
+    };
     this.wasd = {
-      W: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      W: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W, false),
+      A: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A, false),
+      S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S, false),
+      D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D, false),
     };
 
-    // Click to walk
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // If clicked on an agent sprite, don't walk
-      if (pointer.rightButtonDown() || pointer.event.defaultPrevented) return;
-      this.targetPosition = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY);
-    });
+    // Click on canvas to walk
+    this.input.on(
+      'pointerdown',
+      (pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+        if (this.isKeyboardBlocked) return;
+        if (pointer.rightButtonDown() || pointer.event.defaultPrevented) return;
+
+        // If user clicked on an interactive agent sprite, don't walk on top of their desk
+        if (currentlyOver && currentlyOver.length > 0) return;
+
+        // Blur any focused HTML text input when clicking back on the 2D canvas
+        if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+          const tag = document.activeElement.tagName.toUpperCase();
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+            document.activeElement.blur();
+          }
+        }
+
+        this.targetPosition = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY);
+      }
+    );
   }
 
   private handlePlayerMovement() {
+    // Do not process WASD / Arrow movement when user is typing in an input or when a full modal is open
+    if (this.isKeyboardBlocked || this.isTypingInInput()) {
+      if (!this.targetPosition) {
+        this.player.setVelocity(0, 0);
+        return;
+      }
+    }
+
     const speed = 160;
     let vx = 0;
     let vy = 0;
 
-    // Keyboard inputs
-    if (this.cursors.left.isDown || this.wasd.A.isDown) vx -= speed;
-    if (this.cursors.right.isDown || this.wasd.D.isDown) vx += speed;
-    if (this.cursors.up.isDown || this.wasd.W.isDown) vy -= speed;
-    if (this.cursors.down.isDown || this.wasd.S.isDown) vy += speed;
+    // Only read keyboard WASD / Arrow keys when not typing in an input field and no modal is blocking
+    if (!this.isKeyboardBlocked && !this.isTypingInInput() && this.cursors && this.wasd) {
+      if (this.cursors.left.isDown || this.wasd.A.isDown) vx -= speed;
+      if (this.cursors.right.isDown || this.wasd.D.isDown) vx += speed;
+      if (this.cursors.up.isDown || this.wasd.W.isDown) vy -= speed;
+      if (this.cursors.down.isDown || this.wasd.S.isDown) vy += speed;
+    }
 
     if (vx !== 0 || vy !== 0) {
       // Cancel click-to-move if keyboard is pressed
@@ -577,13 +636,13 @@ export class OfficeScene extends Phaser.Scene {
     // Walk CEO to the head of the conference table
     this.tweens.add({
       targets: this.player,
-      x: 710,
-      y: 280,
+      x: 675,
+      y: 250,
       duration: 1000,
       ease: 'Cubic.easeInOut',
     });
 
-    this.cameras.main.pan(710, 210, 800, 'Power2');
+    this.cameras.main.pan(780, 250, 800, 'Power2');
     if (this.callbacks.onMeetingTriggered) {
       this.callbacks.onMeetingTriggered(topic);
     }
@@ -610,5 +669,43 @@ export class OfficeScene extends Phaser.Scene {
     if (currentTask) agent.profile.currentTask = currentTask;
     agent.statusText.setText(newState);
     this.drawStatusPill(agent.statusBg, newState);
+  }
+
+  public showSpeechBubble(agentId: AgentRole, message: string, durationMs: number = 4000) {
+    const agent = this.agentsMap.get(agentId);
+    if (!agent) return;
+
+    if (agent.speechBubble) {
+      agent.speechBubble.destroy();
+      agent.speechBubble = undefined;
+    }
+
+    const shortMsg = message.length > 42 ? `${message.slice(0, 42)}...` : message;
+    const bubble = this.add.container(agent.container.x, agent.container.y - 52);
+    bubble.setDepth(12);
+
+    const width = Math.max(110, shortMsg.length * 5.2 + 18);
+    const bg = this.add.graphics();
+    bg.fillStyle(0x0f172a, 0.95);
+    bg.fillRoundedRect(-width / 2, -13, width, 24, 6);
+    bg.lineStyle(1, Phaser.Display.Color.HexStringToColor(agent.profile.color).color, 0.9);
+    bg.strokeRoundedRect(-width / 2, -13, width, 24, 6);
+
+    const text = this.add.text(0, -1, shortMsg, {
+      fontSize: '9px',
+      color: '#f8fafc',
+      fontStyle: 'bold',
+      fontFamily: 'sans-serif',
+    }).setOrigin(0.5);
+
+    bubble.add([bg, text]);
+    agent.speechBubble = bubble;
+
+    this.time.delayedCall(durationMs, () => {
+      if (agent.speechBubble === bubble) {
+        bubble.destroy();
+        agent.speechBubble = undefined;
+      }
+    });
   }
 }
