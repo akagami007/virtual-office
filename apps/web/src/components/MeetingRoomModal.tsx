@@ -343,7 +343,7 @@ export default function MeetingRoomModal({
             <div className="pt-2">
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Peserta Meja Rapat (8 Agen)</span>
+                <span>Peserta Meja Rapat ({Object.keys(INITIAL_AGENTS_ROSTER).length} Anggota)</span>
               </h4>
               <div className="grid grid-cols-2 gap-2">
                 {Object.values(INITIAL_AGENTS_ROSTER).map((a) => (

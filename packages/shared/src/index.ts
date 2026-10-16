@@ -15,7 +15,8 @@ export type AgentRole =
   | 'AGT-BE'
   | 'AGT-MOB'
   | 'AGT-QA'
-  | 'AGT-OPS';
+  | 'AGT-OPS'
+  | 'AGT-PA';
 
 export type AgentState =
   | 'IDLE'
@@ -424,6 +425,38 @@ COPY . .
 RUN npm run build`,
     lastActive: '4m ago',
   },
+  'AGT-PA': {
+    id: 'AGT-PA',
+    name: 'Anggi',
+    title: 'Executive Personal Assistant to CEO',
+    department: 'Executive',
+    color: '#F43F5E', // Rose
+    avatarSprite: 'avatar_pa',
+    deskPosition: { x: 475, y: 550 },
+    meetingPosition: { x: 710, y: 150 },
+    state: 'IDLE',
+    currentTask: 'Mengatur Kalender Eksekutif & Agenda Rapat CEO',
+    skills: [
+      'Calendar & Schedule Management',
+      'Meeting Coordination & Minutes',
+      'Executive Briefing & Triage',
+      'Travel & Hospitality Logistics',
+      'CEO Priority Guard',
+    ],
+    bio: 'Asisten pribadi eksekutif terpercaya CEO yang mahir mengorkestrasi jadwal rapat, menyaring prioritas masuk, menyiapkan berkas pertemuan, dan memastikan segala kebutuhan operasional harian CEO terpenuhi dengan sempurna.',
+    activeSnippet: `// Anggi: CEO Daily Executive Agenda
+export const todayAgenda = {
+  date: new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+  priorities: [
+    { time: '09:00', title: 'Daily Standup & Briefing Tim Studio', room: 'Boardroom' },
+    { time: '11:00', title: 'Architecture Signoff bersama Viktor (CTO)', status: 'Prepared' },
+    { time: '14:00', title: 'Live Mobile Viewport Demo dengan Raka', status: 'Ready' },
+    { time: '16:00', title: 'Executive Review Hasil Pengujian QA Sinta', status: 'Confirmed' }
+  ],
+  notifications: 'Semua berkas rapat dan kopi segar telah tersedia di meja Anda, CEO.'
+};`,
+    lastActive: 'Just now',
+  },
 };
 
 // ==========================================
@@ -439,7 +472,7 @@ export const INITIAL_ROOMS_SPEC: RoomZone[] = [
     color: '#3B82F6',
     bounds: { x: 550, y: 100, width: 320, height: 220 },
     center: { x: 710, y: 210 },
-    assignedRoles: ['USR-CEO', 'AGT-CTO', 'AGT-PM'],
+    assignedRoles: ['USR-CEO', 'AGT-CTO', 'AGT-PM', 'AGT-PA'],
   },
   {
     id: 'design_studio',
@@ -499,7 +532,7 @@ export const INITIAL_ROOMS_SPEC: RoomZone[] = [
     color: '#8B5CF6',
     bounds: { x: 300, y: 480, width: 220, height: 160 },
     center: { x: 410, y: 560 },
-    assignedRoles: ['USR-CEO'],
+    assignedRoles: ['USR-CEO', 'AGT-PA'],
   },
   {
     id: 'breakroom',

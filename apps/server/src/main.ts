@@ -316,6 +316,6 @@ server.listen(PORT, () => {
   console.log(`🚀 NexusDev Studio Backend Orchestrator & Sandbox Runner`);
   console.log(`📡 WebSocket & REST Gateway running on http://localhost:${PORT}`);
   console.log(`📦 Isolated Workspace Directory: workspaces/`);
-  console.log(`🤖 Multi-Agent Engine: 8 Roles Active`);
+  console.log(`🤖 Multi-Agent Engine: 9 Roles Active (incl. Anggi PA to CEO)`);
   console.log(`=======================================================`);
 });

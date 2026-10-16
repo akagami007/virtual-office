@@ -181,6 +181,7 @@ export class OfficeScene extends Phaser.Scene {
     this.generateAvatarSprite('avatar_mob', 0x6366f1, 0xa5b4fc);
     this.generateAvatarSprite('avatar_qa', 0xef4444, 0xfca5a5);
     this.generateAvatarSprite('avatar_ops', 0x14b8a6, 0x5eead4);
+    this.generateAvatarSprite('avatar_pa', 0xf43f5e, 0xfecdd3);
   }
 
   private generateAvatarSprite(key: string, primaryColor: number, accentColor: number) {
@@ -289,6 +290,7 @@ export class OfficeScene extends Phaser.Scene {
       'AGT-MOB',
       'AGT-QA',
       'AGT-OPS',
+      'AGT-PA',
     ];
 
     roles.forEach((role) => {

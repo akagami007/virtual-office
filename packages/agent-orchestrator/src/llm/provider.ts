@@ -182,6 +182,13 @@ RUN npm run build
 EXPOSE 3000
 CMD ["npm", "start"]`;
 
+      case 'AGT-PA':
+        return `[Anggi - Executive PA to CEO]: Siap, CEO!
+Terkait instruksi Anda: "${prompt}".
+1. Kalender eksekutif dan koordinasi rapat antar-divisi telah saya jadwalkan dengan rapi.
+2. Berkas briefing dan ringkasan poin penting telah saya siapkan di meja kerja Anda.
+3. Seluruh kebutuhan operasional dan agenda CEO siap dikawal penuh. Ada hal lain yang bisa saya siapkan untuk Anda?`;
+
       default:
         return `[${agentRole}]: Instruksi "${prompt}" telah diproses dan dicatat dalam log sprint.`;
     }
