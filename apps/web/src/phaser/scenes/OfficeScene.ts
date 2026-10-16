@@ -411,23 +411,35 @@ export class OfficeScene extends Phaser.Scene {
     const spawnX = ceoProfile.deskPosition.x;
     const spawnY = ceoProfile.deskPosition.y;
 
-    // CEO desk
-    this.add.image(spawnX, spawnY + 20, 'furniture_desk').setDepth(3);
+    // CEO desk (interactive to open CEO Command Center)
+    const ceoDesk = this.add.image(spawnX, spawnY + 20, 'furniture_desk').setDepth(3);
+    ceoDesk.setInteractive({ useHandCursor: true });
+    ceoDesk.on('pointerdown', () => {
+      if (this.callbacks.onAgentClick) {
+        this.callbacks.onAgentClick(ceoProfile);
+      }
+    });
 
     // Player body
     this.player = this.physics.add.sprite(spawnX, spawnY - 10, 'avatar_ceo');
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(5);
     this.player.body.setSize(24, 24);
+    this.player.setInteractive({ useHandCursor: true });
+    this.player.on('pointerdown', () => {
+      if (this.callbacks.onAgentClick) {
+        this.callbacks.onAgentClick(ceoProfile);
+      }
+    });
 
     // Player floating Nametag
-    const ceoLabel = this.add.text(spawnX, spawnY - 32, 'CEO (You)', {
-      fontSize: '11px',
+    const ceoLabel = this.add.text(spawnX, spawnY - 32, 'CEO (You) • Klik Command', {
+      fontSize: '10px',
       color: '#60a5fa',
       fontStyle: 'bold',
       fontFamily: 'sans-serif',
-      backgroundColor: '#1e3a8a99',
-      padding: { x: 4, y: 2 },
+      backgroundColor: '#1e3a8acc',
+      padding: { x: 5, y: 2 },
     }).setOrigin(0.5).setDepth(6);
 
     // Sync label with player position

@@ -11,6 +11,7 @@ import WorkspaceExplorerModal from '../components/WorkspaceExplorerModal';
 import MobileSimulatorModal from '../components/MobileSimulatorModal';
 import QuickNavDock from '../components/QuickNavDock';
 import LiveOfficeFeedPanel from '../components/LiveOfficeFeedPanel';
+import CEOCommandCenterModal from '../components/CEOCommandCenterModal';
 import {
   AgentPeerDiscussion,
   AgentProfile,
@@ -47,6 +48,10 @@ const OfficeCanvas = dynamic(() => import('../components/OfficeCanvas'), {
 export default function StudioPage() {
   const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null);
   const [currentRoom, setCurrentRoom] = useState<RoomZone | null>(null);
+  const [isCEOCommandOpen, setIsCEOCommandOpen] = useState(false);
+  const [ceoCommandTab, setCeoCommandTab] = useState<
+    'briefing' | 'schedule' | 'reports' | 'command'
+  >('briefing');
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
   const [isKanbanOpen, setIsKanbanOpen] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
@@ -58,6 +63,7 @@ export default function StudioPage() {
   const {
     isConnected,
     agents,
+    tasks,
     activeProject,
     pendingApproval,
     peerDiscussions,
@@ -86,14 +92,39 @@ export default function StudioPage() {
   // Block Phaser keyboard & canvas walk when a full-screen modal is open
   useEffect(() => {
     const isModalOpen =
-      isMeetingOpen || isKanbanOpen || isRosterOpen || isWorkspaceOpen || isMobileSimulatorOpen;
+      isCEOCommandOpen ||
+      isMeetingOpen ||
+      isKanbanOpen ||
+      isRosterOpen ||
+      isWorkspaceOpen ||
+      isMobileSimulatorOpen;
     const scene = getScene();
     if (scene && typeof scene.setKeyboardBlocked === 'function') {
       scene.setKeyboardBlocked(isModalOpen);
     }
-  }, [isMeetingOpen, isKanbanOpen, isRosterOpen, isWorkspaceOpen, isMobileSimulatorOpen]);
+  }, [
+    isCEOCommandOpen,
+    isMeetingOpen,
+    isKanbanOpen,
+    isRosterOpen,
+    isWorkspaceOpen,
+    isMobileSimulatorOpen,
+  ]);
+
+  const handleOpenCEOCommand = useCallback(
+    (tab: 'briefing' | 'schedule' | 'reports' | 'command' = 'briefing') => {
+      setCeoCommandTab(tab);
+      setIsCEOCommandOpen(true);
+    },
+    []
+  );
 
   const handleAgentClick = useCallback((agent: AgentProfile) => {
+    if (agent.id === 'USR-CEO') {
+      setCeoCommandTab('briefing');
+      setIsCEOCommandOpen(true);
+      return;
+    }
     setSelectedAgent(agent);
   }, []);
 
@@ -153,17 +184,17 @@ export default function StudioPage() {
           body: JSON.stringify({
             initiatorId,
             targetId,
-            topic: resolvedTopic,
+            customTopic: resolvedTopic,
             skillCommand: resolvedSkill,
           }),
         });
         if (res.ok) {
-          const data = await res.json();
-          if (data?.discussion) {
-            addPeerDiscussion(data.discussion);
+          const discussion = await res.json();
+          if (discussion && discussion.turns) {
+            addPeerDiscussion(discussion);
             const scene = getScene();
             if (scene && typeof scene.playPeerDiscussion === 'function') {
-              scene.playPeerDiscussion(data.discussion, true);
+              scene.playPeerDiscussion(discussion, true);
             }
             return;
           }
@@ -231,12 +262,16 @@ export default function StudioPage() {
     }
   };
 
-  const handleOpenMeeting = () => {
+  const handleOpenMeeting = (customTopic?: string) => {
+    const topic =
+      typeof customTopic === 'string' && customTopic.trim()
+        ? customTopic.trim()
+        : 'Persetujuan Arsitektur & Sinkronisasi Sprint 1';
     const scene = getScene();
     if (scene) {
-      scene.callMeeting('Persetujuan Arsitektur & Sinkronisasi Sprint 1');
+      scene.callMeeting(topic);
     }
-    callMeeting('Persetujuan Arsitektur & Sinkronisasi Sprint 1');
+    callMeeting(topic);
     setIsMeetingOpen(true);
   };
 
@@ -257,7 +292,8 @@ export default function StudioPage() {
       {/* 1. Header HUD Overlay */}
       <HeaderHUD
         currentRoom={currentRoom}
-        onOpenMeeting={handleOpenMeeting}
+        onOpenCEOCommand={() => handleOpenCEOCommand('briefing')}
+        onOpenMeeting={() => handleOpenMeeting()}
         onOpenKanban={() => setIsKanbanOpen(true)}
         onOpenRoster={() => setIsRosterOpen(true)}
         onOpenWorkspace={() => setIsWorkspaceOpen(true)}
@@ -296,11 +332,26 @@ export default function StudioPage() {
           onClose={() => setSelectedAgent(null)}
           onJumpToDesk={handleJumpToAgent}
           onOpenMobileSimulator={() => setIsMobileSimulatorOpen(true)}
+          onOpenCEOCommand={(tab) => handleOpenCEOCommand(tab)}
           onTriggerSkillDiscussion={(initiatorId, targetId, topic, skillCommand) => {
             handleTriggerCustomDiscussion(initiatorId, targetId, topic, skillCommand);
           }}
         />
       )}
+
+      {/* 4.5 CEO Command Center & Anggi (PA) Executive Dashboard Modal */}
+      <CEOCommandCenterModal
+        isOpen={isCEOCommandOpen}
+        onClose={() => setIsCEOCommandOpen(false)}
+        initialTab={ceoCommandTab}
+        activeProject={activeProject}
+        tasks={tasks}
+        onSelectAgent={(agent) => setSelectedAgent(agent)}
+        onJumpToAgent={handleJumpToAgent}
+        onOpenMeeting={(topic) => handleOpenMeeting(topic)}
+        onOpenKanban={() => setIsKanbanOpen(true)}
+        onTriggerPeerDiscussion={handleTriggerCustomDiscussion}
+      />
 
       {/* 5. Kanban Board Modal */}
       <KanbanBoardModal

@@ -5,16 +5,17 @@ import {
   Users,
   Kanban,
   Video,
-  Activity,
   MapPin,
   Sparkles,
   FolderCode,
   Smartphone,
+  Briefcase,
 } from 'lucide-react';
 import { RoomZone } from '@nexusdev/shared';
 
 interface HeaderHUDProps {
   currentRoom: RoomZone | null;
+  onOpenCEOCommand: () => void;
   onOpenMeeting: () => void;
   onOpenKanban: () => void;
   onOpenRoster: () => void;
@@ -26,6 +27,7 @@ interface HeaderHUDProps {
 
 export default function HeaderHUD({
   currentRoom,
+  onOpenCEOCommand,
   onOpenMeeting,
   onOpenKanban,
   onOpenRoster,
@@ -66,7 +68,7 @@ export default function HeaderHUD({
 
       {/* Center: Current Room Location HUD */}
       {currentRoom && (
-        <div className="hidden md:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-full px-4 py-1.5 shadow-lg pointer-events-auto transition-all animate-in fade-in zoom-in-95">
+        <div className="hidden xl:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-full px-4 py-1.5 shadow-lg pointer-events-auto transition-all animate-in fade-in zoom-in-95">
           <MapPin
             className="w-4 h-4"
             style={{ color: currentRoom.color }}
@@ -82,6 +84,15 @@ export default function HeaderHUD({
 
       {/* Right: Quick Action Buttons */}
       <div className="flex items-center gap-2 pointer-events-auto">
+        <button
+          onClick={onOpenCEOCommand}
+          className="flex items-center gap-2 bg-gradient-to-r from-rose-600/90 to-pink-600/90 hover:from-rose-500 hover:to-pink-500 text-white border border-rose-400/30 rounded-xl px-3.5 py-2 text-xs font-bold shadow-lg shadow-rose-600/25 transition-all"
+          title="Buka CEO Command Center: Jadwal, Tugas & Laporan Eksekutif dari Anggi (PA)"
+        >
+          <Briefcase className="w-4 h-4" />
+          <span>Dashboard CEO & Anggi</span>
+        </button>
+
         <button
           onClick={onOpenRoster}
           className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"

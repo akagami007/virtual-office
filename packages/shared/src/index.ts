@@ -231,6 +231,43 @@ export interface AgentPeerDiscussion {
   startedAt: string;
 }
 
+export interface ExecutiveScheduleItem {
+  id: string;
+  time: string;
+  title: string;
+  category: 'STANDUP' | 'ARCHITECTURE' | 'CLIENT' | 'RELEASE' | 'REVIEW';
+  participants: AgentRole[];
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'UPCOMING';
+  notes: string;
+  preparedBy: AgentRole;
+}
+
+export interface DepartmentExecutiveReport {
+  id: string;
+  agentId: AgentRole;
+  department: Department;
+  headline: string;
+  progressPercent: number;
+  health: 'ON_TRACK' | 'NEEDS_ATTENTION' | 'READY_FOR_SIGN_OFF';
+  metricsLabel: string;
+  keyDeliverables: string[];
+  activeSkill: string;
+  updatedAt: string;
+}
+
+export interface ExecutiveDashboardData {
+  briefingSummary: string;
+  schedule: ExecutiveScheduleItem[];
+  departmentReports: DepartmentExecutiveReport[];
+  kpis: {
+    sprintVelocity: string;
+    codeCoverage: string;
+    pipelineStatus: string;
+    activeBlockers: number;
+    clientSatisfaction: string;
+  };
+}
+
 export interface ServerToClientEvents {
   'office:init': (data: {
     agents: Record<AgentRole, AgentProfile>;
@@ -1222,3 +1259,218 @@ export const INITIAL_ROOMS_SPEC: RoomZone[] = [
     assignedRoles: [],
   },
 ];
+
+// ==========================================
+// 8. Default CEO Executive Dashboard & PA (Anggi) Briefing Data
+// ==========================================
+
+export const INITIAL_EXECUTIVE_DASHBOARD: ExecutiveDashboardData = {
+  briefingSummary:
+    'Selamat bertugas, CEO! Saya Anggi (Personal Assistant Anda). Seluruh 8 departemen teknis berjalan sesuai target Sprint 1. Kontrak API & desain UI bebas AI-slop sudah selaras, serta pipeline CI/CD dalam status hijau (98.4% test pass). Hari ini ada 2 agenda keputusan arsitektur & rilis yang membutuhkan arahan Anda.',
+  kpis: {
+    sprintVelocity: '42 SP / Minggu (+18%)',
+    codeCoverage: '94.2% E2E & Unit',
+    pipelineStatus: 'ALL GATES GREEN',
+    activeBlockers: 0,
+    clientSatisfaction: '99.1% SLA Tercapai',
+  },
+  schedule: [
+    {
+      id: 'sched-01',
+      time: '09:00 WIB',
+      title: 'Daily Executive Standup & Sinkronisasi Backlog Sprint',
+      category: 'STANDUP',
+      participants: ['USR-CEO', 'AGT-PA', 'AGT-PM', 'AGT-CTO'],
+      status: 'COMPLETED',
+      notes: 'Aria (/planning-and-task-breakdown) telah memetakan 12 task lintas divisi. Tidak ada blocker kritis.',
+      preparedBy: 'AGT-PA',
+    },
+    {
+      id: 'sched-02',
+      time: '11:00 WIB',
+      title: 'Sign-Off Arsitektur Sistem, TLS 1.3 & Keamanan Database',
+      category: 'ARCHITECTURE',
+      participants: ['USR-CEO', 'AGT-CTO', 'AGT-BE', 'AGT-PA'],
+      status: 'IN_PROGRESS',
+      notes: 'Viktor (/security-and-hardening & /accidental-data-loss-prevention) telah memvalidasi skema database dan kontrak API.',
+      preparedBy: 'AGT-PA',
+    },
+    {
+      id: 'sched-03',
+      time: '13:30 WIB',
+      title: 'Review Desain UI/UX Anti-Slop & Simulator Mobile iOS/Android',
+      category: 'REVIEW',
+      participants: ['USR-CEO', 'AGT-UIUX', 'AGT-FE', 'AGT-MOB'],
+      status: 'UPCOMING',
+      notes: 'Kael (/antislop-ui) dan Raka (/antislop-layoutmobile) siap mendemokan ergonomi tap-target 48px dan kontras WCAG AA.',
+      preparedBy: 'AGT-PA',
+    },
+    {
+      id: 'sched-04',
+      time: '15:30 WIB',
+      title: 'Keputusan Go/No-Go Deployment Staging & Audit Quality Gate',
+      category: 'RELEASE',
+      participants: ['USR-CEO', 'AGT-OPS', 'AGT-QA', 'AGT-PA'],
+      status: 'UPCOMING',
+      notes: 'Sinta (/test-driven-development) dan Dion (/ci-cd-and-automation) telah menyiapkan laporan kesiapan rilis.',
+      preparedBy: 'AGT-PA',
+    },
+    {
+      id: 'sched-05',
+      time: '17:00 WIB',
+      title: 'Rekap Eksekutif Harian & Prioritas Besok bersama Anggi (PA)',
+      category: 'CLIENT',
+      participants: ['USR-CEO', 'AGT-PA'],
+      status: 'UPCOMING',
+      notes: 'Anggi (/automation & /context-engineering) menyusun notulensi otomatis dan jadwal harian berikutnya.',
+      preparedBy: 'AGT-PA',
+    },
+  ],
+  departmentReports: [
+    {
+      id: 'rep-pa',
+      agentId: 'AGT-PA',
+      department: 'Executive',
+      headline: 'Orkestrasi Jadwal CEO, Briefing Lintas-Divisi & Notulensi Otomatis',
+      progressPercent: 100,
+      health: 'ON_TRACK',
+      metricsLabel: '5 Agenda Terjadwal • 0 Bentrok Kalender',
+      keyDeliverables: [
+        'Menyusun Executive Morning Briefing untuk CEO (/context-engineering)',
+        'Mengatur pengingat rapat otomatis & sinkronisasi dengan Aria PM (/automation)',
+        'Merangkum laporan status dari 8 kepala engineering dalam 1 dashboard',
+      ],
+      activeSkill: '/automation & /context-engineering',
+      updatedAt: 'Baru saja',
+    },
+    {
+      id: 'rep-cto',
+      agentId: 'AGT-CTO',
+      department: 'Architecture',
+      headline: 'Audit Keamanan Arsitektur, Kontrak Modul & Proteksi Data Produksi',
+      progressPercent: 95,
+      health: 'READY_FOR_SIGN_OFF',
+      metricsLabel: '0 Kerentanan Kritis • TLS 1.3 Aktif',
+      keyDeliverables: [
+        'Multi-axis review pada lapisan WebSocket & REST API (/code-review-and-quality)',
+        'Pemasangan guard anti-DROP/TRUNCATE pada database (/accidental-data-loss-prevention)',
+        'Verifikasi adversarial terhadap race-condition (/doubt-driven-development)',
+      ],
+      activeSkill: '/security-and-hardening',
+      updatedAt: '2 menit lalu',
+    },
+    {
+      id: 'rep-pm',
+      agentId: 'AGT-PM',
+      department: 'Management',
+      headline: 'Pemecahan Spesifikasi Produk, Peta Dependensi & ADR Sprint 1',
+      progressPercent: 92,
+      health: 'ON_TRACK',
+      metricsLabel: '12/14 Story Selesai • 100% Spec Tercakup',
+      keyDeliverables: [
+        'Dokumen spesifikasi fungsional dan kriteria penerimaan (/spec-driven-development)',
+        'Pemecahan task terurut untuk FE, BE, Mobile, QA, DevOps (/planning-and-task-breakdown)',
+        'Pencatatan Architecture Decision Records (/documentation-and-adrs)',
+      ],
+      activeSkill: '/planning-and-task-breakdown',
+      updatedAt: '3 menit lalu',
+    },
+    {
+      id: 'rep-uiux',
+      agentId: 'AGT-UIUX',
+      department: 'Product & Design',
+      headline: 'Design System Berkarakter Tinggi & Audit Aksesibilitas WCAG AA',
+      progressPercent: 96,
+      health: 'ON_TRACK',
+      metricsLabel: 'Kontras > 7.1:1 • 0 Generic AI Slop',
+      keyDeliverables: [
+        'Token warna gelap studio & hierarki tipografi tajam (/antislop-ui)',
+        'Audit kontras teks, navigasi keyboard, dan focus ring (/antislop-human)',
+        'Mikro-kopi tombol dan pesan status berbahasa Indonesia lugas (/antislop-copywriting)',
+      ],
+      activeSkill: '/antislop-ui',
+      updatedAt: '4 menit lalu',
+    },
+    {
+      id: 'rep-fe',
+      agentId: 'AGT-FE',
+      department: 'Web Engineering',
+      headline: 'Implementasi Next.js 15 App Router, Phaser 2D Engine & Real-time HUD',
+      progressPercent: 94,
+      health: 'ON_TRACK',
+      metricsLabel: '60 FPS Stabil • First Load JS 151 kB',
+      keyDeliverables: [
+        'Integrasi mulus kanvas 2D Phaser dengan panel modal React (/frontend-ui-engineering)',
+        'Optimasi siklus render dan pencegahan memory leak AudioContext (/performance-optimization)',
+        'Verifikasi DOM dan 0 runtime error di browser (/browser-testing-with-devtools)',
+      ],
+      activeSkill: '/frontend-ui-engineering',
+      updatedAt: '1 menit lalu',
+    },
+    {
+      id: 'rep-be',
+      agentId: 'AGT-BE',
+      department: 'Web Engineering',
+      headline: 'Layanan REST/WebSocket Gateway, Kontrak API & Pemetaan Skema',
+      progressPercent: 93,
+      health: 'ON_TRACK',
+      metricsLabel: 'Latensi API 14ms • Uptime 100%',
+      keyDeliverables: [
+        'Endpoint orkestrasi kolaborasi agen & pembacaan SKILL.md (/api-and-interface-design)',
+        'Pemetaan skema data proyek, tugas, dan laporan eksekutif (/schema-mapping)',
+        'Validasi dan pembersihan payload input otomatis (/data-autocleaning)',
+      ],
+      activeSkill: '/api-and-interface-design',
+      updatedAt: '2 menit lalu',
+    },
+    {
+      id: 'rep-mob',
+      agentId: 'AGT-MOB',
+      department: 'Mobile Engineering',
+      headline: 'Modul Mobile Lintas-Platform (iOS & Android) & Ergonomi Sentuh',
+      progressPercent: 90,
+      health: 'ON_TRACK',
+      metricsLabel: 'Tap Target >= 48px • iOS & Android Ready',
+      keyDeliverables: [
+        'Reflow layout responsif dari layar iPhone hingga tablet (/antislop-layoutmobile)',
+        'Pengiriman fitur bertahap pada simulator native (/incremental-implementation)',
+        'Kepatuhan terhadap SDK Expo & Flutter terbaru (/source-driven-development)',
+      ],
+      activeSkill: '/antislop-layoutmobile',
+      updatedAt: '5 menit lalu',
+    },
+    {
+      id: 'rep-qa',
+      agentId: 'AGT-QA',
+      department: 'Quality Assurance',
+      headline: 'Suite Pengujian TDD Otomatis & Root-Cause Triage (Stop-the-Line)',
+      progressPercent: 97,
+      health: 'READY_FOR_SIGN_OFF',
+      metricsLabel: '48/48 Test Lulus • 0 Regresi Terbuka',
+      keyDeliverables: [
+        'Siklus pengujian Red-Green-Refactor pada fitur inti (/test-driven-development)',
+        'Isolasi input keyboard WASD vs pengetikan chat (/debugging-and-error-recovery)',
+        'Pengujian skenario ekstrem dan fallback jaringan (/doubt-driven-development)',
+      ],
+      activeSkill: '/test-driven-development',
+      updatedAt: '1 menit lalu',
+    },
+    {
+      id: 'rep-ops',
+      agentId: 'AGT-OPS',
+      department: 'DevOps & Infrastructure',
+      headline: 'Otomatisasi Quality Gate CI/CD, Observability & Kesiapan Rilis',
+      progressPercent: 98,
+      health: 'READY_FOR_SIGN_OFF',
+      metricsLabel: 'Build 3.9s • 0 Type Error • Git Synced',
+      keyDeliverables: [
+        'Pipeline Shift-Left: tsc --noEmit & next build lulus 100% (/ci-cd-and-automation)',
+        'Pemantauan kesehatan server & WebSocket real-time (/observability-and-instrumentation)',
+        'Checklist peluncuran produksi & strategi rollback (/shipping-and-launch)',
+      ],
+      activeSkill: '/ci-cd-and-automation',
+      updatedAt: 'Baru saja',
+    },
+  ],
+};
+

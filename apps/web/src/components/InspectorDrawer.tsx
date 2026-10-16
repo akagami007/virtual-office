@@ -94,6 +94,7 @@ interface InspectorDrawerProps {
   onClose: () => void;
   onJumpToDesk: (agentId: string) => void;
   onOpenMobileSimulator?: () => void;
+  onOpenCEOCommand?: (initialTab?: 'briefing' | 'schedule' | 'reports' | 'command') => void;
   onTriggerSkillDiscussion?: (
     initiatorId: AgentRole,
     targetId: AgentRole,
@@ -107,6 +108,7 @@ export default function InspectorDrawer({
   onClose,
   onJumpToDesk,
   onOpenMobileSimulator,
+  onOpenCEOCommand,
   onTriggerSkillDiscussion,
 }: InspectorDrawerProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'code' | 'chat'>('profile');
@@ -532,6 +534,42 @@ export default function InspectorDrawer({
                 >
                   <Smartphone className="w-4 h-4" />
                   <span>Buka Simulator Mobile (iOS & Android)</span>
+                </button>
+              </div>
+            )}
+
+            {(agent.id === 'AGT-PA' || agent.id === 'USR-CEO') && onOpenCEOCommand && (
+              <div className="pt-2 space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-rose-300">
+                  Akses Langsung CEO & Personal Assistant (Anggi)
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenCEOCommand('schedule')}
+                    className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/35 text-rose-200 border border-rose-500/40 font-bold text-xs transition-all"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Jadwal & Agenda CEO</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenCEOCommand('reports')}
+                    className="flex items-center justify-center gap-1.5 p-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-200 border border-emerald-500/40 font-bold text-xs transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Laporan Semua Divisi</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onOpenCEOCommand('command')}
+                  className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-rose-600/25 transition-all"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Buka CEO Command Center (Delegasi Tugas & Proyek)</span>
                 </button>
               </div>
             )}

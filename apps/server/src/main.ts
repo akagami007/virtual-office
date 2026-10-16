@@ -13,11 +13,15 @@ import {
   ApprovalGate,
   ChatMessage,
   ClientToServerEvents,
+  ExecutiveDashboardData,
+  ExecutiveScheduleItem,
   INITIAL_AGENTS_ROSTER,
+  INITIAL_EXECUTIVE_DASHBOARD,
   INITIAL_ROOMS_SPEC,
   Project,
   ServerToClientEvents,
   Task,
+  TaskPriority,
 } from '@nexusdev/shared';
 import {
   SDLCWorkflowEngine,
@@ -52,6 +56,12 @@ let activeProject: Project = {
 };
 
 const agentsRoster: Record<AgentRole, AgentProfile> = { ...INITIAL_AGENTS_ROSTER };
+let executiveDashboard: ExecutiveDashboardData = {
+  ...INITIAL_EXECUTIVE_DASHBOARD,
+  schedule: [...INITIAL_EXECUTIVE_DASHBOARD.schedule],
+  departmentReports: [...INITIAL_EXECUTIVE_DASHBOARD.departmentReports],
+};
+const customTasks: Task[] = [];
 const workspaceManager = new WorkspaceManager();
 const workflowEngine = new SDLCWorkflowEngine(getLLMProvider(), workspaceManager);
 
@@ -138,6 +148,140 @@ app.post('/api/projects/kickoff', async (req, res) => {
   res.json({
     message: 'Proyek berhasil diinisiasi & workspace terisolasi dibuat',
     project: activeProject,
+  });
+});
+
+// CEO Executive Suite & Personal Assistant (Anggi) Endpoints
+app.get('/api/ceo/dashboard', (req, res) => {
+  res.json({
+    dashboard: executiveDashboard,
+    activeProject,
+    tasks: [...customTasks, ...workflowEngine.getTasks()],
+    agents: Object.values(agentsRoster),
+  });
+});
+
+app.post('/api/ceo/schedule', (req, res) => {
+  const { time, title, category, participants, notes } = req.body;
+  const newItem: ExecutiveScheduleItem = {
+    id: `sched-${Date.now()}`,
+    time: time || '16:00 WIB',
+    title: title || 'Agenda Eksekutif Baru CEO',
+    category: category || 'REVIEW',
+    participants:
+      Array.isArray(participants) && participants.length > 0
+        ? participants
+        : ['USR-CEO', 'AGT-PA', 'AGT-CTO'],
+    status: 'UPCOMING',
+    notes:
+      notes ||
+      'Disiapkan otomatis oleh Anggi (PA) menggunakan protokol /automation & /context-engineering.',
+    preparedBy: 'AGT-PA',
+  };
+
+  executiveDashboard.schedule = [...executiveDashboard.schedule, newItem];
+
+  // Trigger Anggi speech bubble on 2D canvas
+  io.emit('agent:speech', {
+    agentId: 'AGT-PA',
+    message: `Siap CEO! Jadwal "${newItem.title}" (${newItem.time}) telah saya catat & undangan sudah dikirim.`,
+    durationMs: 4500,
+  });
+
+  res.json({
+    message: 'Jadwal eksekutif berhasil ditambahkan oleh Anggi (PA)',
+    item: newItem,
+    schedule: executiveDashboard.schedule,
+  });
+});
+
+app.patch('/api/ceo/schedule/:id', (req, res) => {
+  const { status } = req.body;
+  executiveDashboard.schedule = executiveDashboard.schedule.map((item) =>
+    item.id === req.params.id ? { ...item, status: status || 'COMPLETED' } : item
+  );
+  res.json({ schedule: executiveDashboard.schedule });
+});
+
+app.post('/api/ceo/delegate-task', (req, res) => {
+  const { title, description, assignee, priority } = req.body as {
+    title?: string;
+    description?: string;
+    assignee?: AgentRole;
+    priority?: TaskPriority;
+  };
+
+  const targetRole: AgentRole = assignee || 'AGT-FE';
+  const targetAgent = agentsRoster[targetRole] || agentsRoster['AGT-FE'];
+  const newTask: Task = {
+    id: `task-ceo-${Date.now()}`,
+    projectId: activeProject.id,
+    title: title || 'Instruksi Strategis CEO',
+    description:
+      description ||
+      `Direktif langsung dari CEO yang dikoordinasikan melalui Anggi (PA) untuk ${targetAgent.name}.`,
+    assignee: targetRole,
+    status: 'IN_PROGRESS',
+    priority: priority || 'HIGH',
+    iteration: 1,
+    estimatedTime: '2h',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  customTasks.unshift(newTask);
+
+  // Update target agent's live state and currentTask
+  if (agentsRoster[targetRole]) {
+    agentsRoster[targetRole].state = 'CODING';
+    agentsRoster[targetRole].currentTask = newTask.title;
+  }
+
+  io.emit('task:created', newTask);
+  io.emit('agent:status_updated', {
+    agentId: targetRole,
+    state: 'CODING',
+    currentTask: newTask.title,
+  });
+
+  // Trigger Anggi -> Target Agent desk visit discussion
+  const targetSkills = AGENT_SKILLS_REGISTRY[targetRole] || [];
+  const primarySkill = targetSkills[0]?.slashCommand || '/incremental-implementation';
+  const delegationDiscussion: AgentPeerDiscussion = {
+    id: `disc-ceo-del-${Date.now()}`,
+    initiatorId: 'AGT-PA',
+    targetId: targetRole,
+    topic: `Delegasi Tugas CEO: ${newTask.title}`,
+    skillApplied: `/planning-and-task-breakdown & ${primarySkill}`,
+    locationLabel: `Meja ${targetAgent.name} (${targetAgent.department})`,
+    startedAt: new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    turns: [
+      {
+        speakerId: 'AGT-PA',
+        speakerName: 'Anggi (PA CEO)',
+        speakerColor: '#F43F5E',
+        skillUsed: '/planning-and-task-breakdown',
+        text: `Halo ${targetAgent.name}, CEO baru saja menugaskan prioritas ${newTask.priority}: "${newTask.title}".`,
+      },
+      {
+        speakerId: targetRole,
+        speakerName: `${targetAgent.name} (${targetAgent.department.split(' ')[0]})`,
+        speakerColor: targetAgent.color,
+        skillUsed: primarySkill,
+        text: `Siap Anggi! Tolong sampaikan ke CEO, saya langsung kerjakan "${newTask.title}" dengan standar ${primarySkill}.`,
+      },
+    ],
+  };
+
+  io.emit('office:peer_discussion', delegationDiscussion);
+
+  res.json({
+    message: `Tugas berhasil didelegasikan ke ${targetAgent.name} melalui Anggi (PA)`,
+    task: newTask,
+    discussion: delegationDiscussion,
   });
 });
 
