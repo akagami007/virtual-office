@@ -8,6 +8,7 @@ import {
   Activity,
   MapPin,
   Sparkles,
+  FolderCode,
 } from 'lucide-react';
 import { RoomZone } from '@nexusdev/shared';
 
@@ -16,6 +17,7 @@ interface HeaderHUDProps {
   onOpenMeeting: () => void;
   onOpenKanban: () => void;
   onOpenRoster: () => void;
+  onOpenWorkspace: () => void;
   activeAgentsCount: number;
   isConnected?: boolean;
 }
@@ -25,6 +27,7 @@ export default function HeaderHUD({
   onOpenMeeting,
   onOpenKanban,
   onOpenRoster,
+  onOpenWorkspace,
   activeAgentsCount,
   isConnected = false,
 }: HeaderHUDProps) {
@@ -95,6 +98,15 @@ export default function HeaderHUD({
         >
           <Kanban className="w-4 h-4 text-amber-400" />
           <span className="hidden sm:inline">Kanban</span>
+        </button>
+
+        <button
+          onClick={onOpenWorkspace}
+          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
+          title="Lihat Berkas Kode Proyek & Sandbox Terminal"
+        >
+          <FolderCode className="w-4 h-4 text-emerald-400" />
+          <span className="hidden sm:inline">Workspace</span>
         </button>
 
         <button

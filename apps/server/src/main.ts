@@ -13,12 +13,12 @@ import {
   Project,
   ServerToClientEvents,
   Task,
-  TaskStatus,
 } from '@nexusdev/shared';
 import {
   SDLCWorkflowEngine,
   getLLMProvider,
 } from '@nexusdev/agent-orchestrator';
+import { WorkspaceManager } from '@nexusdev/sandbox-runner';
 
 const app = express();
 const server = http.createServer(app);
@@ -47,7 +47,11 @@ let activeProject: Project = {
 };
 
 const agentsRoster: Record<AgentRole, AgentProfile> = { ...INITIAL_AGENTS_ROSTER };
-const workflowEngine = new SDLCWorkflowEngine(getLLMProvider());
+const workspaceManager = new WorkspaceManager();
+const workflowEngine = new SDLCWorkflowEngine(getLLMProvider(), workspaceManager);
+
+// Auto-seed initial project workspace
+workspaceManager.scaffoldProject(activeProject.id, 'FULLSTACK').catch(console.error);
 
 // ==========================================
 // REST API Routes
@@ -56,7 +60,7 @@ const workflowEngine = new SDLCWorkflowEngine(getLLMProvider());
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'NexusDev Studio Orchestrator',
+    service: 'NexusDev Studio Orchestrator & Sandbox Runner',
     agentsOnline: Object.keys(agentsRoster).length,
     activePhase: workflowEngine.getCurrentPhase(),
     timestamp: new Date().toISOString(),
@@ -87,13 +91,54 @@ app.post('/api/projects/kickoff', async (req, res) => {
   workflowEngine.startProject(activeProject).catch(console.error);
 
   res.json({
-    message: 'Proyek berhasil diinisiasi',
+    message: 'Proyek berhasil diinisiasi & workspace terisolasi dibuat',
     project: activeProject,
   });
 });
 
 app.get('/api/agents', (req, res) => {
   res.json(Object.values(agentsRoster));
+});
+
+// Workspace Inspection & Sandbox Execution Endpoints
+app.get('/api/workspaces/:projectId/files', async (req, res) => {
+  try {
+    const files = await workspaceManager.listFiles(req.params.projectId);
+    res.json({ projectId: req.params.projectId, files });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/workspaces/:projectId/file', async (req, res) => {
+  try {
+    const filePath = req.query.path as string;
+    if (!filePath) {
+      return res.status(400).json({ error: 'Query parameter "path" is required' });
+    }
+    const content = await workspaceManager.readFile(req.params.projectId, filePath);
+    res.json({ projectId: req.params.projectId, path: filePath, content });
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+app.post('/api/workspaces/:projectId/execute', async (req, res) => {
+  try {
+    const { command, args, timeoutMs } = req.body;
+    if (!command) {
+      return res.status(400).json({ error: 'Body parameter "command" is required' });
+    }
+    const result = await workspaceManager.executeCommand({
+      projectId: req.params.projectId,
+      command,
+      args,
+      timeoutMs,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==========================================
@@ -268,8 +313,9 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`=======================================================`);
-  console.log(`🚀 NexusDev Studio Backend Orchestrator`);
+  console.log(`🚀 NexusDev Studio Backend Orchestrator & Sandbox Runner`);
   console.log(`📡 WebSocket & REST Gateway running on http://localhost:${PORT}`);
+  console.log(`📦 Isolated Workspace Directory: workspaces/`);
   console.log(`🤖 Multi-Agent Engine: 8 Roles Active`);
   console.log(`=======================================================`);
 });

@@ -7,6 +7,7 @@ import InspectorDrawer from '../components/InspectorDrawer';
 import KanbanBoardModal from '../components/KanbanBoardModal';
 import MeetingRoomModal from '../components/MeetingRoomModal';
 import AgentRosterModal from '../components/AgentRosterModal';
+import WorkspaceExplorerModal from '../components/WorkspaceExplorerModal';
 import QuickNavDock from '../components/QuickNavDock';
 import {
   AgentProfile,
@@ -43,6 +44,7 @@ export default function StudioPage() {
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
   const [isKanbanOpen, setIsKanbanOpen] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
 
   // Real-time WebSocket connection to Backend Orchestrator
   const {
@@ -126,6 +128,7 @@ export default function StudioPage() {
         onOpenMeeting={handleOpenMeeting}
         onOpenKanban={() => setIsKanbanOpen(true)}
         onOpenRoster={() => setIsRosterOpen(true)}
+        onOpenWorkspace={() => setIsWorkspaceOpen(true)}
         activeAgentsCount={Object.keys(agents || INITIAL_AGENTS_ROSTER).length - 1} // minus CEO
         isConnected={isConnected}
       />
@@ -173,6 +176,13 @@ export default function StudioPage() {
         onClose={() => setIsRosterOpen(false)}
         onSelectAgent={(agent) => setSelectedAgent(agent)}
         onJumpToAgent={handleJumpToAgent}
+      />
+
+      {/* 8. Workspace Explorer & Sandbox Terminal Modal */}
+      <WorkspaceExplorerModal
+        isOpen={isWorkspaceOpen}
+        onClose={() => setIsWorkspaceOpen(false)}
+        projectId="proj-nexus-01"
       />
     </main>
   );
