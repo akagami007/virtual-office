@@ -6,6 +6,24 @@ import { createPhaserConfig } from '../phaser/config';
 import { OfficeScene, SceneCallbacks } from '../phaser/scenes/OfficeScene';
 import { AgentProfile, RoomZone } from '@nexusdev/shared';
 
+// Safe monkey-patch for AudioContext.prototype.suspend to guard against closed context suspensions
+if (typeof window !== 'undefined') {
+  const AudioContextClass =
+    window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (AudioContextClass && AudioContextClass.prototype) {
+    const origSuspend = AudioContextClass.prototype.suspend;
+    if (origSuspend && !(origSuspend as unknown as { __isPatched?: boolean }).__isPatched) {
+      AudioContextClass.prototype.suspend = function () {
+        if (this.state === 'closed') {
+          return Promise.resolve();
+        }
+        return origSuspend.call(this);
+      };
+      (AudioContextClass.prototype.suspend as unknown as { __isPatched?: boolean }).__isPatched = true;
+    }
+  }
+}
+
 interface OfficeCanvasProps {
   onAgentClick: (agent: AgentProfile) => void;
   onRoomEnter: (room: RoomZone) => void;
@@ -21,7 +39,31 @@ export default function OfficeCanvas({
 }: OfficeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const callbacksRef = useRef<SceneCallbacks>({
+    onAgentClick,
+    onRoomEnter,
+    onPlayerMove,
+    onMeetingTriggered,
+  });
 
+  // Keep latest callbacks updated in ref and propagate to active scene
+  useEffect(() => {
+    callbacksRef.current = {
+      onAgentClick,
+      onRoomEnter,
+      onPlayerMove,
+      onMeetingTriggered,
+    };
+
+    if (gameRef.current) {
+      const scene = gameRef.current.scene.getScene('OfficeScene') as OfficeScene;
+      if (scene && scene.scene.isActive()) {
+        scene.setCallbacks(callbacksRef.current);
+      }
+    }
+  }, [onAgentClick, onRoomEnter, onPlayerMove, onMeetingTriggered]);
+
+  // Initialize Phaser Game instance ONCE on mount
   useEffect(() => {
     if (!containerRef.current || gameRef.current) return;
 
@@ -29,17 +71,11 @@ export default function OfficeCanvas({
     const game = new Phaser.Game(config);
     gameRef.current = game;
 
-    // Attach callbacks once scene is booted
+    // Attach initial callbacks once scene is booted
     const checkSceneBoot = setInterval(() => {
       const scene = game.scene.getScene('OfficeScene') as OfficeScene;
       if (scene && scene.scene.isActive()) {
-        const callbacks: SceneCallbacks = {
-          onAgentClick,
-          onRoomEnter,
-          onPlayerMove,
-          onMeetingTriggered,
-        };
-        scene.setCallbacks(callbacks);
+        scene.setCallbacks(callbacksRef.current);
         clearInterval(checkSceneBoot);
       }
     }, 100);
@@ -47,11 +83,15 @@ export default function OfficeCanvas({
     return () => {
       clearInterval(checkSceneBoot);
       if (gameRef.current) {
-        gameRef.current.destroy(true);
+        try {
+          gameRef.current.destroy(true);
+        } catch (err) {
+          console.warn('[Phaser] Game destroy warning:', err);
+        }
         gameRef.current = null;
       }
     };
-  }, [onAgentClick, onRoomEnter, onPlayerMove, onMeetingTriggered]);
+  }, []);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-[#070a11] overflow-hidden select-none">

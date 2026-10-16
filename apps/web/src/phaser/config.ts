@@ -21,5 +21,8 @@ export function createPhaserConfig(parent: HTMLElement): Phaser.Types.Core.GameC
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
+    audio: {
+      noAudio: true,
+    },
   };
 }

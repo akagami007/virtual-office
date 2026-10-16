@@ -123,6 +123,10 @@ export default function StudioPage() {
     setIsMeetingOpen(false);
   };
 
+  const handleMeetingTriggered = useCallback(() => {
+    setIsMeetingOpen(true);
+  }, []);
+
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#070a11]">
       {/* 1. Header HUD Overlay */}
@@ -142,7 +146,7 @@ export default function StudioPage() {
         onAgentClick={handleAgentClick}
         onRoomEnter={handleRoomEnter}
         onPlayerMove={handlePlayerMove}
-        onMeetingTriggered={() => setIsMeetingOpen(true)}
+        onMeetingTriggered={handleMeetingTriggered}
       />
 
       {/* 3. Quick Navigation Floating Dock */}
