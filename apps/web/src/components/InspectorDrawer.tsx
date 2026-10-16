@@ -25,6 +25,7 @@ import {
   INITIAL_AGENTS_ROSTER,
 } from '@nexusdev/shared';
 import { OfficeScene } from '../phaser/scenes/OfficeScene';
+import CharacterAvatar from './CharacterAvatar';
 
 const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000';
 
@@ -277,15 +278,7 @@ export default function InspectorDrawer({
       {/* Header */}
       <div className="p-5 border-b border-slate-800 bg-slate-950/40 flex items-start justify-between">
         <div className="flex items-center gap-3.5">
-          <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg"
-            style={{
-              backgroundColor: agent.color,
-              boxShadow: `0 8px 24px ${agent.color}44`,
-            }}
-          >
-            {agent.name.charAt(0)}
-          </div>
+          <CharacterAvatar role={agent.id} size="lg" showStatusDot />
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-white tracking-tight">

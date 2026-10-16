@@ -119,7 +119,7 @@ export default function HeaderHUD({
         <button
           onClick={onOpenRoster}
           className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
-          title="Lihat Daftar Tim Agen AI"
+          title="Lihat Direktori Rekan Kerja"
         >
           <Users className="w-4 h-4 text-cyan-400" />
           <span className="hidden md:inline">Tim</span>

@@ -10,6 +10,8 @@ import {
   RoomId,
   RoomZone,
 } from '@nexusdev/shared';
+import { registerHumanCharacterSprites } from '../humanSpriteGenerator';
+import { HUMAN_CHARACTER_SPECS } from '../../components/CharacterAvatar';
 
 export interface SceneCallbacks {
   onAgentClick?: (agent: AgentProfile) => void;
@@ -31,12 +33,21 @@ export class OfficeScene extends Phaser.Scene {
   private targetPosition: Phaser.Math.Vector2 | null = null;
   private agentsMap: Map<AgentRole, {
     container: Phaser.GameObjects.Container;
+    sprite: Phaser.GameObjects.Sprite;
+    emoteText: Phaser.GameObjects.Text;
     profile: AgentProfile;
     statusText: Phaser.GameObjects.Text;
     statusBg: Phaser.GameObjects.Graphics;
     speechBubble?: Phaser.GameObjects.Container;
     activeBubbleType?: 'proximity' | 'dialogue';
+    prevX: number;
+    prevY: number;
+    animTick: number;
+    isBlinking: boolean;
   }> = new Map();
+  private playerPrevX: number = 0;
+  private playerPrevY: number = 0;
+  private playerAnimFrame: number = 0;
 
   private isMeetingActive: boolean = false;
   private isKeyboardBlocked: boolean = false;
@@ -119,10 +130,11 @@ export class OfficeScene extends Phaser.Scene {
     this.checkRoomProximity();
     this.checkAgentProximity();
     this.updateSpeechBubblesAndPeerLinks();
+    this.updateCharacterWalkFrames();
   }
 
   // ==========================================
-  // Texture Generator (Procedural Pixel-Art)
+  // Texture Generator (Gather.town 2.5D Style)
   // ==========================================
   private generateProceduralTextures() {
     // Tile Wood (32x32)
@@ -154,21 +166,42 @@ export class OfficeScene extends Phaser.Scene {
     gTech.generateTexture('tile_tech', 32, 32);
     gTech.destroy();
 
-    // Desk Furniture (64x40)
+    // Desk Furniture (68x42) with Dual Monitor, Keyboard, Coffee Mug & Mini Plant
     const gDesk = this.make.graphics({ x: 0, y: 0 });
-    gDesk.fillStyle(0x283548, 1);
-    gDesk.fillRoundedRect(0, 0, 64, 40, 4);
+    // Warm walnut/slate desk top
+    gDesk.fillStyle(0x293548, 1);
+    gDesk.fillRoundedRect(0, 0, 68, 42, 6);
     gDesk.lineStyle(2, 0x475569, 1);
-    gDesk.strokeRoundedRect(0, 0, 64, 40, 4);
-    // Computer screen
+    gDesk.strokeRoundedRect(0, 0, 68, 42, 6);
+    // Desk mat
+    gDesk.fillStyle(0x1e293b, 0.9);
+    gDesk.fillRoundedRect(14, 6, 40, 28, 3);
+    // Ultrawide Computer Monitor
     gDesk.fillStyle(0x0f172a, 1);
-    gDesk.fillRect(16, 6, 32, 18);
-    gDesk.fillStyle(0x38bdf8, 0.9); // Glowing monitor screen
-    gDesk.fillRect(18, 8, 28, 14);
-    // Keyboard
-    gDesk.fillStyle(0x64748b, 0.8);
-    gDesk.fillRect(20, 26, 24, 8);
-    gDesk.generateTexture('furniture_desk', 64, 40);
+    gDesk.fillRoundedRect(16, 5, 36, 18, 2);
+    gDesk.fillStyle(0x38bdf8, 0.85);
+    gDesk.fillRect(18, 7, 32, 14);
+    // Code lines on monitor
+    gDesk.fillStyle(0xffffff, 0.8);
+    gDesk.fillRect(20, 9, 14, 2);
+    gDesk.fillStyle(0x34d399, 0.9);
+    gDesk.fillRect(20, 13, 20, 2);
+    gDesk.fillStyle(0xfbbf24, 0.9);
+    gDesk.fillRect(20, 17, 11, 2);
+    // Mechanical Keyboard
+    gDesk.fillStyle(0x94a3b8, 0.9);
+    gDesk.fillRoundedRect(22, 26, 24, 7, 1.5);
+    // Coffee Mug on right side
+    gDesk.fillStyle(0xf8fafc, 1);
+    gDesk.fillCircle(58, 26, 4);
+    gDesk.fillStyle(0x78350f, 1);
+    gDesk.fillCircle(58, 26, 2.6);
+    // Mini Desk Plant on left side
+    gDesk.fillStyle(0x10b981, 1);
+    gDesk.fillCircle(8, 12, 4.5);
+    gDesk.fillStyle(0x34d399, 1);
+    gDesk.fillCircle(9, 10, 2.5);
+    gDesk.generateTexture('furniture_desk', 68, 42);
     gDesk.destroy();
 
     // Conference Table (180x80)
@@ -191,7 +224,6 @@ export class OfficeScene extends Phaser.Scene {
     gServer.fillRect(0, 0, 40, 70);
     gServer.lineStyle(2, 0x0ea5e9, 0.8);
     gServer.strokeRect(0, 0, 40, 70);
-    // Blinking rack lights
     for (let y = 10; y <= 55; y += 12) {
       gServer.fillStyle(0x1e293b, 1);
       gServer.fillRect(4, y, 32, 8);
@@ -203,39 +235,17 @@ export class OfficeScene extends Phaser.Scene {
     gServer.generateTexture('furniture_server', 40, 70);
     gServer.destroy();
 
-    // Generate Avatar Sprites
-    this.generateAvatarSprite('avatar_ceo', 0x3b82f6, 0x93c5fd);
-    this.generateAvatarSprite('avatar_cto', 0x8b5cf6, 0xc4b5fd);
-    this.generateAvatarSprite('avatar_pm', 0xec4899, 0xf9a8d4);
-    this.generateAvatarSprite('avatar_uiux', 0xf59e0b, 0xfde68a);
-    this.generateAvatarSprite('avatar_fe', 0x10b981, 0x6ee7b7);
-    this.generateAvatarSprite('avatar_be', 0x06b6d4, 0x67e8f9);
-    this.generateAvatarSprite('avatar_mob', 0x6366f1, 0xa5b4fc);
-    this.generateAvatarSprite('avatar_qa', 0xef4444, 0xfca5a5);
-    this.generateAvatarSprite('avatar_ops', 0x14b8a6, 0x5eead4);
-    this.generateAvatarSprite('avatar_pa', 0xf43f5e, 0xfecdd3);
+    // Generate Multi-Pose Human Character Sprites & Office Chairs
+    registerHumanCharacterSprites(this);
   }
 
-  private generateAvatarSprite(key: string, primaryColor: number, accentColor: number) {
-    const g = this.make.graphics({ x: 0, y: 0 });
-    // Head / Hair
-    g.fillStyle(accentColor, 1);
-    g.fillCircle(16, 10, 8);
-    // Face
-    g.fillStyle(0xfde047, 0.9);
-    g.fillCircle(16, 11, 6);
-    // Eyes
-    g.fillStyle(0x1e293b, 1);
-    g.fillCircle(14, 11, 1.2);
-    g.fillCircle(18, 11, 1.2);
-    // Body / Uniform
-    g.fillStyle(primaryColor, 1);
-    g.fillRoundedRect(8, 17, 16, 15, 3);
-    // Badge / Pin
-    g.fillStyle(0xffffff, 0.9);
-    g.fillRect(11, 20, 3, 4);
-    g.generateTexture(key, 32, 34);
-    g.destroy();
+  private getHumanStateLabel(state: AgentState): string {
+    if (state === 'CODING') return 'NGODING';
+    if (state === 'REVIEWING') return 'DISKUSI';
+    if (state === 'THINKING') return 'RISET';
+    if (state === 'TESTING') return 'UJI QA';
+    if (state === 'WAITING_APPROVAL') return 'TUNGGU CEO';
+    return 'STANDBY';
   }
 
   // ==========================================
@@ -299,17 +309,17 @@ export class OfficeScene extends Phaser.Scene {
     gWb.strokeRoundedRect(95, 145, 95, 8, 2);
     gWb.setDepth(2);
 
-    // Lounge: Sofa and Water cooler
+    // Lounge: Sofa, Coffee Machine & Water cooler
     const gLounge = this.add.graphics();
-    gLounge.fillStyle(0x7c3aed, 0.8);
-    gLounge.fillRoundedRect(710, 540, 100, 30, 6);
+    gLounge.fillStyle(0x7c3aed, 0.85);
+    gLounge.fillRoundedRect(710, 540, 105, 32, 8);
     gLounge.fillStyle(0x0284c7, 1);
     gLounge.fillCircle(860, 555, 10); // Water dispenser
     gLounge.setDepth(2);
   }
 
   // ==========================================
-  // Agents Setup
+  // Human Team Setup & Life-like Micro-Animations
   // ==========================================
   private spawnAgents() {
     const roles: AgentRole[] = [
@@ -324,25 +334,35 @@ export class OfficeScene extends Phaser.Scene {
       'AGT-PA',
     ];
 
-    roles.forEach((role) => {
+    roles.forEach((role, index) => {
       const profile = INITIAL_AGENTS_ROSTER[role];
       if (!profile) return;
 
+      const visualSpec = HUMAN_CHARACTER_SPECS[role];
+
+      // 0. Ergonomic Office Chair behind character
+      const chair = this.add.image(
+        profile.deskPosition.x,
+        profile.deskPosition.y - 22,
+        'furniture_chair'
+      );
+      chair.setDepth(2.5);
+
       // 1. Desk placement
-      const desk = this.add.image(profile.deskPosition.x, profile.deskPosition.y, 'furniture_desk');
+      const desk = this.add.image(profile.deskPosition.x, profile.deskPosition.y + 4, 'furniture_desk');
       desk.setDepth(3);
 
-      // 2. Container for Agent Avatar + Nametag + Status Pill
-      const container = this.add.container(profile.deskPosition.x, profile.deskPosition.y - 12);
+      // 2. Container for Human Character Sprite + Nametag + Emote + Status Pill
+      const container = this.add.container(profile.deskPosition.x, profile.deskPosition.y - 14);
       container.setDepth(4);
 
-      // Agent Sprite
-      const sprite = this.add.sprite(0, 0, profile.avatarSprite);
+      // Human Character Sprite (Multi-Pose)
+      const sprite = this.add.sprite(0, 0, `${profile.avatarSprite}_idle_0`);
       sprite.setInteractive({ useHandCursor: true });
 
-      // Pulsing Glow on hover
+      // Hover interaction
       sprite.on('pointerover', () => {
-        sprite.setScale(1.15);
+        sprite.setScale(1.12);
         nameText.setColor('#ffffff');
       });
       sprite.on('pointerout', () => {
@@ -350,57 +370,188 @@ export class OfficeScene extends Phaser.Scene {
         nameText.setColor(profile.color);
       });
 
-      // Click to select Agent
+      // Click to select colleague
       sprite.on('pointerdown', () => {
         if (this.callbacks.onAgentClick) {
           this.callbacks.onAgentClick(profile);
         }
       });
 
-      // Name label
-      const nameText = this.add.text(0, -26, profile.name.split(' ')[0], {
+      // First name + Role short badge
+      const firstName = profile.name.split(' ')[0];
+      const nameText = this.add.text(0, -31, firstName, {
         fontSize: '11px',
         color: profile.color,
         fontStyle: 'bold',
         fontFamily: 'sans-serif',
+        backgroundColor: '#0f172acc',
+        padding: { x: 4, y: 1 },
       }).setOrigin(0.5);
+
+      // Floating Human Activity Emote (☕, 💻, 💡, 🎨, etc.)
+      const initialEmote = visualSpec?.emotePool[0] || '💻';
+      const emoteText = this.add.text(22, -26, initialEmote, {
+        fontSize: '12px',
+      }).setOrigin(0.5);
+
+      // Gentle floating bob for emote badge
+      this.tweens.add({
+        targets: emoteText,
+        y: -30,
+        duration: 1100 + index * 90,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
 
       // Status pill background
       const statusBg = this.add.graphics();
       this.drawStatusPill(statusBg, profile.state);
 
-      // Status text
-      const statusText = this.add.text(0, 22, profile.state, {
+      // Humanized Status text
+      const statusText = this.add.text(0, 26, this.getHumanStateLabel(profile.state), {
         fontSize: '8px',
         color: '#ffffff',
         fontStyle: 'bold',
-        fontFamily: 'monospace',
+        fontFamily: 'sans-serif',
       }).setOrigin(0.5);
 
-      container.add([sprite, nameText, statusBg, statusText]);
+      container.add([sprite, nameText, emoteText, statusBg, statusText]);
 
       this.agentsMap.set(role, {
         container,
+        sprite,
+        emoteText,
         profile,
         statusText,
         statusBg,
+        prevX: container.x,
+        prevY: container.y,
+        animTick: index,
+        isBlinking: false,
       });
     });
+
+    // Periodic Human Breathing, Typing & Eye-Blinking Loop (every 420ms)
+    this.time.addEvent({
+      delay: 420,
+      loop: true,
+      callback: () => this.tickHumanIdleAndWorkFrames(),
+    });
+
+    // Periodic Human Emote Rotation (coffee sips, ideas, focus) every 6.5s
+    this.time.addEvent({
+      delay: 6500,
+      loop: true,
+      callback: () => {
+        this.agentsMap.forEach((agent, role) => {
+          const pool = HUMAN_CHARACTER_SPECS[role]?.emotePool || ['💻', '☕'];
+          const nextEmote = pool[Math.floor(Math.random() * pool.length)];
+          agent.emoteText.setText(nextEmote);
+        });
+      },
+    });
+  }
+
+  private tickHumanIdleAndWorkFrames() {
+    this.agentsMap.forEach((agent) => {
+      // Skip if currently walking (walk frames handled in updateCharacterWalkFrames)
+      const dx = Math.abs(agent.container.x - agent.prevX);
+      const dy = Math.abs(agent.container.y - agent.prevY);
+      if (dx > 0.4 || dy > 0.4) return;
+
+      agent.animTick += 1;
+      const baseKey = agent.profile.avatarSprite;
+
+      // Occasional natural eye blink (roughly every 7-10 ticks)
+      if (agent.animTick % 9 === 0) {
+        agent.sprite.setTexture(`${baseKey}_blink`);
+        return;
+      }
+
+      const isWorkingState =
+        agent.profile.state === 'CODING' ||
+        agent.profile.state === 'TESTING' ||
+        agent.profile.state === 'REVIEWING';
+
+      if (isWorkingState) {
+        const workPose = agent.animTick % 2 === 0 ? 'work_0' : 'work_1';
+        agent.sprite.setTexture(`${baseKey}_${workPose}`);
+      } else {
+        const idlePose = agent.animTick % 2 === 0 ? 'idle_0' : 'idle_1';
+        agent.sprite.setTexture(`${baseKey}_${idlePose}`);
+      }
+    });
+
+    // Also animate CEO idle/blink when standing still
+    if (this.player && this.player.body) {
+      const pSpeed = this.player.body.velocity.length();
+      if (pSpeed < 5) {
+        this.playerAnimFrame += 1;
+        if (this.playerAnimFrame % 10 === 0) {
+          this.player.setTexture('avatar_ceo_blink');
+        } else {
+          const pose = this.playerAnimFrame % 2 === 0 ? 'idle_0' : 'idle_1';
+          this.player.setTexture(`avatar_ceo_${pose}`);
+        }
+      }
+    }
+  }
+
+  private updateCharacterWalkFrames() {
+    const now = this.time.now;
+    const walkFrame = Math.floor(now / 160) % 2 === 0 ? 'walk_0' : 'walk_1';
+
+    // 1. Check each colleague's movement delta for walking leg/arm swing
+    this.agentsMap.forEach((agent) => {
+      const dx = agent.container.x - agent.prevX;
+      const dy = agent.container.y - agent.prevY;
+      const moved = Math.hypot(dx, dy);
+
+      if (moved > 0.35) {
+        agent.sprite.setTexture(`${agent.profile.avatarSprite}_${walkFrame}`);
+        if (Math.abs(dx) > 0.2) {
+          agent.sprite.setFlipX(dx < 0);
+        }
+      } else {
+        agent.sprite.setFlipX(false);
+      }
+
+      agent.prevX = agent.container.x;
+      agent.prevY = agent.container.y;
+    });
+
+    // 2. Check CEO player movement for walking animation & direction flip
+    if (this.player && this.player.body) {
+      const vx = this.player.body.velocity.x;
+      const vy = this.player.body.velocity.y;
+      const dx = this.player.x - this.playerPrevX;
+      const dy = this.player.y - this.playerPrevY;
+
+      if (Math.hypot(vx, vy) > 5 || Math.hypot(dx, dy) > 0.5) {
+        this.player.setTexture(`avatar_ceo_${walkFrame}`);
+        if (Math.abs(vx) > 2 || Math.abs(dx) > 0.3) {
+          this.player.setFlipX((vx !== 0 ? vx : dx) < 0);
+        }
+      }
+      this.playerPrevX = this.player.x;
+      this.playerPrevY = this.player.y;
+    }
   }
 
   private drawStatusPill(g: Phaser.GameObjects.Graphics, state: AgentState) {
     g.clear();
-    let color = 0x64748b; // IDLE
-    if (state === 'CODING') color = 0x10b981;
-    if (state === 'TESTING') color = 0xef4444;
-    if (state === 'REVIEWING') color = 0x8b5cf6;
-    if (state === 'THINKING') color = 0xec4899;
-    if (state === 'WAITING_APPROVAL') color = 0xf59e0b;
+    let color = 0x475569; // STANDBY
+    if (state === 'CODING') color = 0x059669;
+    if (state === 'TESTING') color = 0xdc2626;
+    if (state === 'REVIEWING') color = 0x7c3aed;
+    if (state === 'THINKING') color = 0xdb2777;
+    if (state === 'WAITING_APPROVAL') color = 0xd97706;
 
-    g.fillStyle(color, 0.9);
-    g.fillRoundedRect(-24, 16, 48, 12, 4);
-    g.lineStyle(1, 0xffffff, 0.4);
-    g.strokeRoundedRect(-24, 16, 48, 12, 4);
+    g.fillStyle(color, 0.92);
+    g.fillRoundedRect(-26, 20, 52, 12, 4);
+    g.lineStyle(1, 0xffffff, 0.35);
+    g.strokeRoundedRect(-26, 20, 52, 12, 4);
   }
 
   // ==========================================
@@ -411,7 +562,8 @@ export class OfficeScene extends Phaser.Scene {
     const spawnX = ceoProfile.deskPosition.x;
     const spawnY = ceoProfile.deskPosition.y;
 
-    // CEO desk (interactive to open CEO Command Center)
+    // CEO Chair & Desk (interactive to open CEO Command Center)
+    this.add.image(spawnX, spawnY - 18, 'furniture_chair').setDepth(2.5);
     const ceoDesk = this.add.image(spawnX, spawnY + 20, 'furniture_desk').setDepth(3);
     ceoDesk.setInteractive({ useHandCursor: true });
     ceoDesk.on('pointerdown', () => {
@@ -421,10 +573,10 @@ export class OfficeScene extends Phaser.Scene {
     });
 
     // Player body
-    this.player = this.physics.add.sprite(spawnX, spawnY - 10, 'avatar_ceo');
+    this.player = this.physics.add.sprite(spawnX, spawnY - 10, 'avatar_ceo_idle_0');
     this.player.setCollideWorldBounds(true);
     this.player.setDepth(5);
-    this.player.body.setSize(24, 24);
+    this.player.body.setSize(26, 28);
     this.player.setInteractive({ useHandCursor: true });
     this.player.on('pointerdown', () => {
       if (this.callbacks.onAgentClick) {
@@ -432,19 +584,22 @@ export class OfficeScene extends Phaser.Scene {
       }
     });
 
+    this.playerPrevX = spawnX;
+    this.playerPrevY = spawnY - 10;
+
     // Player floating Nametag
-    const ceoLabel = this.add.text(spawnX, spawnY - 32, 'CEO (You) • Klik Command', {
+    const ceoLabel = this.add.text(spawnX, spawnY - 36, '👔 Anda (CEO) • Klik Meja Komando', {
       fontSize: '10px',
-      color: '#60a5fa',
+      color: '#93c5fd',
       fontStyle: 'bold',
       fontFamily: 'sans-serif',
-      backgroundColor: '#1e3a8acc',
-      padding: { x: 5, y: 2 },
+      backgroundColor: '#0f172add',
+      padding: { x: 6, y: 2 },
     }).setOrigin(0.5).setDepth(6);
 
     // Sync label with player position
     this.events.on('postupdate', () => {
-      ceoLabel.setPosition(this.player.x, this.player.y - 24);
+      ceoLabel.setPosition(this.player.x, this.player.y - 28);
     });
   }
 
@@ -615,16 +770,17 @@ export class OfficeScene extends Phaser.Scene {
     speechBubble?: Phaser.GameObjects.Container;
     activeBubbleType?: 'proximity' | 'dialogue';
   }) {
-    const bubble = this.add.container(agent.container.x, agent.container.y - 48);
+    const firstName = agent.profile.name.split(' ')[0];
+    const bubble = this.add.container(agent.container.x, agent.container.y - 52);
     bubble.setDepth(10);
 
     const bg = this.add.graphics();
     bg.fillStyle(0x0f172a, 0.95);
-    bg.fillRoundedRect(-50, -12, 100, 22, 5);
-    bg.lineStyle(1, 0x6366f1, 0.8);
-    bg.strokeRoundedRect(-50, -12, 100, 22, 5);
+    bg.fillRoundedRect(-58, -12, 116, 22, 6);
+    bg.lineStyle(1, 0x6366f1, 0.85);
+    bg.strokeRoundedRect(-58, -12, 116, 22, 6);
 
-    const text = this.add.text(0, -1, 'Klik tuk bicara', {
+    const text = this.add.text(0, -1, `👋 Ngobrol dgn ${firstName}`, {
       fontSize: '9px',
       color: '#e2e8f0',
       fontStyle: 'bold',
@@ -640,7 +796,7 @@ export class OfficeScene extends Phaser.Scene {
     // Keep speech bubbles anchored above moving agent containers
     this.agentsMap.forEach((agent) => {
       if (agent.speechBubble) {
-        const yOffset = agent.activeBubbleType === 'dialogue' ? -54 : -48;
+        const yOffset = agent.activeBubbleType === 'dialogue' ? -56 : -50;
         agent.speechBubble.setPosition(agent.container.x, agent.container.y + yOffset);
       }
     });
@@ -735,7 +891,7 @@ export class OfficeScene extends Phaser.Scene {
         this.tweens.add({
           targets: prevA.container,
           x: prevA.profile.deskPosition.x,
-          y: prevA.profile.deskPosition.y - 12,
+          y: prevA.profile.deskPosition.y - 14,
           duration: 800,
         });
       }
@@ -743,7 +899,7 @@ export class OfficeScene extends Phaser.Scene {
         this.tweens.add({
           targets: prevB.container,
           x: prevB.profile.deskPosition.x,
-          y: prevB.profile.deskPosition.y - 12,
+          y: prevB.profile.deskPosition.y - 14,
           duration: 800,
         });
       }
@@ -772,7 +928,7 @@ export class OfficeScene extends Phaser.Scene {
     let destInitiatorX = target.profile.deskPosition.x - 42;
     let destInitiatorY = target.profile.deskPosition.y - 8;
     let destTargetX = target.profile.deskPosition.x;
-    let destTargetY = target.profile.deskPosition.y - 12;
+    let destTargetY = target.profile.deskPosition.y - 14;
 
     if (discussion.isLoungeBreak) {
       destInitiatorX = 735;
@@ -819,8 +975,7 @@ export class OfficeScene extends Phaser.Scene {
     discussion.turns.forEach((turn, idx) => {
       const timer = this.time.delayedCall(arrivalDelayMs + idx * turnIntervalMs, () => {
         if (this.isMeetingActive) return;
-        const skillPrefix = turn.skillUsed ? `${turn.skillUsed}: ` : '';
-        this.showSpeechBubble(turn.speakerId, `${skillPrefix}${turn.text}`, turnIntervalMs - 250);
+        this.showSpeechBubble(turn.speakerId, `💬 ${turn.text}`, turnIntervalMs - 250);
       });
       this.peerTimers.push(timer);
     });
@@ -835,7 +990,7 @@ export class OfficeScene extends Phaser.Scene {
         this.tweens.add({
           targets: initiator.container,
           x: initiator.profile.deskPosition.x,
-          y: initiator.profile.deskPosition.y - 12,
+          y: initiator.profile.deskPosition.y - 14,
           duration: 1350,
           ease: 'Sine.easeInOut',
         });
@@ -844,7 +999,7 @@ export class OfficeScene extends Phaser.Scene {
           this.tweens.add({
             targets: target.container,
             x: target.profile.deskPosition.x,
-            y: target.profile.deskPosition.y - 12,
+            y: target.profile.deskPosition.y - 14,
             duration: 1350,
             ease: 'Sine.easeInOut',
           });
@@ -916,7 +1071,7 @@ export class OfficeScene extends Phaser.Scene {
       this.tweens.add({
         targets: agent.container,
         x: agent.profile.deskPosition.x,
-        y: agent.profile.deskPosition.y - 12,
+        y: agent.profile.deskPosition.y - 14,
         duration: 1400,
         ease: 'Cubic.easeInOut',
       });
@@ -928,7 +1083,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!agent) return;
     agent.profile.state = newState;
     if (currentTask) agent.profile.currentTask = currentTask;
-    agent.statusText.setText(newState);
+    agent.statusText.setText(this.getHumanStateLabel(newState));
     this.drawStatusPill(agent.statusBg, newState);
   }
 

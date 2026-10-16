@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import CharacterAvatar from './CharacterAvatar';
 import {
   X,
   Video,
@@ -174,7 +175,7 @@ export default function MeetingRoomModal({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Konferensi Kolaborasi 8 Karakter Agen AI & Persetujuan CEO (HITL)
+                Rapat Koordinasi Seluruh Tim Studio & Persetujuan CEO (HITL)
               </p>
             </div>
           </div>
@@ -217,12 +218,7 @@ export default function MeetingRoomModal({
                   }`}
                 >
                   {!msg.isSystem && (
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-xs shrink-0 shadow-md"
-                      style={{ backgroundColor: msg.avatarColor }}
-                    >
-                      {msg.senderName.charAt(0)}
-                    </div>
+                    <CharacterAvatar role={msg.senderRole} size="sm" />
                   )}
 
                   <div className="flex-1">

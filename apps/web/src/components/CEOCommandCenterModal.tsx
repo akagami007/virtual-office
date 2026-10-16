@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import CharacterAvatar from './CharacterAvatar';
 import {
   X,
   Briefcase,
@@ -851,12 +852,7 @@ export default function CEOCommandCenterModal({
                         {/* Agent Header */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2.5">
-                            <div
-                              className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-sm shrink-0"
-                              style={{ backgroundColor: agent?.color || '#6366f1' }}
-                            >
-                              {agent?.name.charAt(0)}
-                            </div>
+                            <CharacterAvatar role={rep.agentId} size="md" />
                             <div>
                               <div className="text-xs font-bold text-white">
                                 {agent?.name} — {agent?.title.split('&')[0]}

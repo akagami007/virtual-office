@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { X, UserCheck, Compass, Sparkles, MessageSquare } from 'lucide-react';
+import { X, UserCheck, Compass, MessageSquare } from 'lucide-react';
 import { AgentProfile, INITIAL_AGENTS_ROSTER } from '@nexusdev/shared';
+import CharacterAvatar, { HUMAN_CHARACTER_SPECS } from './CharacterAvatar';
 
 interface AgentRosterModalProps {
   isOpen: boolean;
@@ -30,10 +31,10 @@ export default function AgentRosterModal({
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight">
-                Direktori Tim Agen AI (8 Spesialis)
+                Direktori Tim & Rekan Kerja Studio (9 Staf & Eksekutif)
               </h2>
               <p className="text-xs text-slate-400">
-                NexusDev Studio — Autonomous Engineering Workforce
+                NexusDev Studio — Kenali Spesialisasi & Aktivitas Rekan Kerja Anda
               </p>
             </div>
           </div>
@@ -48,22 +49,21 @@ export default function AgentRosterModal({
 
         {/* Roster Grid */}
         <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-950/20">
-          {Object.values(INITIAL_AGENTS_ROSTER).map((agent) => (
+          {Object.values(INITIAL_AGENTS_ROSTER).map((agent) => {
+            const spec = HUMAN_CHARACTER_SPECS[agent.id];
+            return (
             <div
               key={agent.id}
               className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:border-slate-500/80 transition-all shadow-md flex flex-col justify-between space-y-3 group"
             >
               <div>
                 <div className="flex items-start justify-between">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-lg text-sm"
-                    style={{ backgroundColor: agent.color }}
-                  >
-                    {agent.name.charAt(0)}
+                  <CharacterAvatar role={agent.id} size="lg" showStatusDot />
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-slate-200 border border-slate-700">
+                      {spec?.emotePool[0] || '💼'} {spec?.humanStatusText || agent.state}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-slate-900 text-slate-300 border border-slate-700">
-                    {agent.state}
-                  </span>
                 </div>
 
                 <div className="mt-3">
@@ -121,7 +121,8 @@ export default function AgentRosterModal({
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

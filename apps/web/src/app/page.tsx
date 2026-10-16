@@ -39,7 +39,7 @@ const OfficeCanvas = dynamic(() => import('../components/OfficeCanvas'), {
           Memuat NexusDev 2D Spatial Engine...
         </p>
         <p className="text-xs text-slate-500 mt-1">
-          Inisialisasi WebGL, A* Pathfinding, & Karakter Agen AI
+          Inisialisasi WebGL, A* Pathfinding, & Rekan Kerja Studio
         </p>
       </div>
     </div>
