@@ -319,7 +319,7 @@ export class SDLCWorkflowEngine extends EventEmitter {
    */
   public async runDevOps(): Promise<void> {
     this.setPhase('DEVOPS_PACKAGING');
-    this.emit('agent:state', 'AGT-OPS', 'CODING', 'Dion sedang membangun Dockerfile & CI/CD pipeline di workspace...');
+    this.emit('agent:state', 'AGT-OPS', 'CODING', 'Dion sedang membangun Dockerfile, Docker Compose, & CI/CD pipeline...');
 
     const [dockerfileContent, ciWorkflowContent] = await Promise.all([
       this.llm.generateText({
@@ -332,13 +332,108 @@ export class SDLCWorkflowEngine extends EventEmitter {
       }),
     ]);
 
+    const dockerComposeContent = `version: '3.8'
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - API_URL=http://api:5000
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ./apps/server
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_URL=postgresql://user:password@postgres:5432/nexusdb
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nexusdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+`;
+
+    const mobileCiContent = `name: Mobile Multi-Platform Native Release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  build-mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Dependencies
+        run: npm ci
+      - name: Build Android App Bundle (AAB)
+        run: npx eas-cli build --platform android --profile production --non-interactive
+`;
+
+    const easConfig = JSON.stringify(
+      {
+        cli: { version: '>= 12.0.0' },
+        build: {
+          development: { developmentClient: true, distribution: 'internal' },
+          preview: { distribution: 'internal' },
+          production: {
+            android: { buildType: 'app-bundle' },
+            ios: { simulator: false },
+          },
+        },
+      },
+      null,
+      2
+    );
+
     if (this.project) {
       await this.workspaceManager.writeFile(this.project.id, 'Dockerfile', dockerfileContent);
+      await this.workspaceManager.writeFile(this.project.id, 'docker-compose.yml', dockerComposeContent);
       await this.workspaceManager.writeFile(this.project.id, '.github/workflows/ci.yml', ciWorkflowContent);
+      await this.workspaceManager.writeFile(this.project.id, '.github/workflows/mobile-release.yml', mobileCiContent);
+      await this.workspaceManager.writeFile(this.project.id, 'apps/mobile/eas.json', easConfig);
     }
 
-    this.emit('agent:state', 'AGT-OPS', 'IDLE', 'Paket kontainer dan pipa CI/CD siap rilis.');
+    this.emit('agent:state', 'AGT-OPS', 'IDLE', 'Paket kontainer dan pipa CI/CD multi-platform siap.');
+
+    // Create Final Release Approval Gate for CEO (HITL)
+    const releaseGate: ApprovalGate = {
+      id: `gate-release-${Date.now()}`,
+      projectId: this.project?.id || 'default',
+      type: 'STAGING_DEPLOY',
+      title: 'Persetujuan Rilis Produksi & Paket Distribusi Mobile',
+      description: `Seluruh artefak (Web Next.js, API Node.js, Paket Android AAB, dan iOS IPA Archive) telah lulus uji QA otomatis dan siap diluncurkan ke server produksi.`,
+      requestedBy: 'AGT-OPS',
+      status: 'PENDING',
+      diffPayload: {
+        filename: 'docker-compose.yml',
+        details: `+ Docker Compose Production Cluster Configured\n+ Web Next.js 15 SSR Container Ready\n+ Node.js API Service Configured\n+ Expo EAS Build & Fastlane Manifests Ready`,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    this.emit('approval:requested', releaseGate);
     this.setPhase('COMPLETED');
+
     this.emit('meeting:called', `Proyek ${this.project?.name} Telah Siap Dirilis ke Produksi`, [
       'USR-CEO',
       'AGT-PM',

@@ -9,6 +9,7 @@ import {
   MapPin,
   Sparkles,
   FolderCode,
+  Smartphone,
 } from 'lucide-react';
 import { RoomZone } from '@nexusdev/shared';
 
@@ -18,6 +19,7 @@ interface HeaderHUDProps {
   onOpenKanban: () => void;
   onOpenRoster: () => void;
   onOpenWorkspace: () => void;
+  onOpenMobileSimulator: () => void;
   activeAgentsCount: number;
   isConnected?: boolean;
 }
@@ -28,6 +30,7 @@ export default function HeaderHUD({
   onOpenKanban,
   onOpenRoster,
   onOpenWorkspace,
+  onOpenMobileSimulator,
   activeAgentsCount,
   isConnected = false,
 }: HeaderHUDProps) {
@@ -107,6 +110,15 @@ export default function HeaderHUD({
         >
           <FolderCode className="w-4 h-4 text-emerald-400" />
           <span className="hidden sm:inline">Workspace</span>
+        </button>
+
+        <button
+          onClick={onOpenMobileSimulator}
+          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
+          title="Buka Simulator Mobile Android & iOS"
+        >
+          <Smartphone className="w-4 h-4 text-indigo-400" />
+          <span className="hidden sm:inline">Mobile</span>
         </button>
 
         <button

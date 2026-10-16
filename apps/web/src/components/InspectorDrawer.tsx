@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   Compass,
+  Smartphone,
 } from 'lucide-react';
 import { AgentProfile, AgentState } from '@nexusdev/shared';
 
@@ -18,12 +19,14 @@ interface InspectorDrawerProps {
   agent: AgentProfile | null;
   onClose: () => void;
   onJumpToDesk: (agentId: string) => void;
+  onOpenMobileSimulator?: () => void;
 }
 
 export default function InspectorDrawer({
   agent,
   onClose,
   onJumpToDesk,
+  onOpenMobileSimulator,
 }: InspectorDrawerProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'code' | 'chat'>('profile');
   const [chatInput, setChatInput] = useState('');
@@ -203,6 +206,18 @@ export default function InspectorDrawer({
                 ))}
               </div>
             </div>
+
+            {agent.id === 'AGT-MOB' && onOpenMobileSimulator && (
+              <div className="pt-2">
+                <button
+                  onClick={onOpenMobileSimulator}
+                  className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.02]"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Buka Simulator Mobile (iOS & Android)</span>
+                </button>
+              </div>
+            )}
           </>
         )}
 

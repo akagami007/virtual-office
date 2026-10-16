@@ -8,6 +8,7 @@ import KanbanBoardModal from '../components/KanbanBoardModal';
 import MeetingRoomModal from '../components/MeetingRoomModal';
 import AgentRosterModal from '../components/AgentRosterModal';
 import WorkspaceExplorerModal from '../components/WorkspaceExplorerModal';
+import MobileSimulatorModal from '../components/MobileSimulatorModal';
 import QuickNavDock from '../components/QuickNavDock';
 import {
   AgentProfile,
@@ -45,12 +46,14 @@ export default function StudioPage() {
   const [isKanbanOpen, setIsKanbanOpen] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [isMobileSimulatorOpen, setIsMobileSimulatorOpen] = useState(false);
 
   // Real-time WebSocket connection to Backend Orchestrator
   const {
     isConnected,
     agents,
     tasks,
+    activeProject,
     pendingApproval,
     sendPlayerMove,
     callMeeting,
@@ -129,6 +132,7 @@ export default function StudioPage() {
         onOpenKanban={() => setIsKanbanOpen(true)}
         onOpenRoster={() => setIsRosterOpen(true)}
         onOpenWorkspace={() => setIsWorkspaceOpen(true)}
+        onOpenMobileSimulator={() => setIsMobileSimulatorOpen(true)}
         activeAgentsCount={Object.keys(agents || INITIAL_AGENTS_ROSTER).length - 1} // minus CEO
         isConnected={isConnected}
       />
@@ -150,6 +154,7 @@ export default function StudioPage() {
           agent={agents[selectedAgent.id] || selectedAgent}
           onClose={() => setSelectedAgent(null)}
           onJumpToDesk={handleJumpToAgent}
+          onOpenMobileSimulator={() => setIsMobileSimulatorOpen(true)}
         />
       )}
 
@@ -183,6 +188,13 @@ export default function StudioPage() {
         isOpen={isWorkspaceOpen}
         onClose={() => setIsWorkspaceOpen(false)}
         projectId="proj-nexus-01"
+      />
+
+      {/* 9. Mobile App Simulator & Native Build Pipelines */}
+      <MobileSimulatorModal
+        isOpen={isMobileSimulatorOpen}
+        onClose={() => setIsMobileSimulatorOpen(false)}
+        projectName={activeProject?.name}
       />
     </main>
   );
