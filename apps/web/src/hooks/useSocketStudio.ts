@@ -13,6 +13,7 @@ import {
   INITIAL_AGENTS_ROSTER,
   Project,
   ServerToClientEvents,
+  SoftwareFactoryRun,
   Task,
 } from '@nexusdev/shared';
 
@@ -24,6 +25,7 @@ export function useSocketStudio() {
   const [agents, setAgents] = useState<Record<AgentRole, AgentProfile>>(INITIAL_AGENTS_ROSTER);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [activeFactoryRun, setActiveFactoryRun] = useState<SoftwareFactoryRun | null>(null);
   const [pendingApproval, setPendingApproval] = useState<ApprovalGate | null>(null);
   const [meetingTranscript, setMeetingTranscript] = useState<ChatMessage[]>([]);
   const [activeMeetingTopic, setActiveMeetingTopic] = useState<string | null>(null);
@@ -70,6 +72,12 @@ export function useSocketStudio() {
       if (data.agents) setAgents(data.agents);
       if (data.tasks) setTasks(data.tasks);
       if (data.activeProject) setActiveProject(data.activeProject);
+      if (data.activeFactoryRun) setActiveFactoryRun(data.activeFactoryRun);
+    });
+
+    // Autonomous Software Factory updates
+    socket.on('factory:updated', (run) => {
+      setActiveFactoryRun(run);
     });
 
     // Peer-to-peer discussion broadcast from backend
@@ -186,6 +194,8 @@ export function useSocketStudio() {
     agents,
     tasks,
     activeProject,
+    activeFactoryRun,
+    setActiveFactoryRun,
     pendingApproval,
     meetingTranscript,
     activeMeetingTopic,

@@ -12,6 +12,7 @@ import MobileSimulatorModal from '../components/MobileSimulatorModal';
 import QuickNavDock from '../components/QuickNavDock';
 import LiveOfficeFeedPanel from '../components/LiveOfficeFeedPanel';
 import CEOCommandCenterModal from '../components/CEOCommandCenterModal';
+import SoftwareFactoryModal from '../components/SoftwareFactoryModal';
 import {
   AgentPeerDiscussion,
   AgentProfile,
@@ -52,6 +53,8 @@ export default function StudioPage() {
   const [ceoCommandTab, setCeoCommandTab] = useState<
     'briefing' | 'schedule' | 'reports' | 'command'
   >('briefing');
+  const [isFactoryOpen, setIsFactoryOpen] = useState(false);
+  const [workspaceProjectId, setWorkspaceProjectId] = useState('proj-nexus-01');
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
   const [isKanbanOpen, setIsKanbanOpen] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
@@ -67,6 +70,8 @@ export default function StudioPage() {
     activeProject,
     pendingApproval,
     peerDiscussions,
+    activeFactoryRun,
+    setActiveFactoryRun,
     addPeerDiscussion,
     sendPlayerMove,
     callMeeting,
@@ -93,6 +98,7 @@ export default function StudioPage() {
   useEffect(() => {
     const isModalOpen =
       isCEOCommandOpen ||
+      isFactoryOpen ||
       isMeetingOpen ||
       isKanbanOpen ||
       isRosterOpen ||
@@ -104,6 +110,7 @@ export default function StudioPage() {
     }
   }, [
     isCEOCommandOpen,
+    isFactoryOpen,
     isMeetingOpen,
     isKanbanOpen,
     isRosterOpen,
@@ -293,6 +300,8 @@ export default function StudioPage() {
       <HeaderHUD
         currentRoom={currentRoom}
         onOpenCEOCommand={() => handleOpenCEOCommand('briefing')}
+        onOpenFactory={() => setIsFactoryOpen(true)}
+        factoryStatus={activeFactoryRun?.status}
         onOpenMeeting={() => handleOpenMeeting()}
         onOpenKanban={() => setIsKanbanOpen(true)}
         onOpenRoster={() => setIsRosterOpen(true)}
@@ -353,6 +362,19 @@ export default function StudioPage() {
         onTriggerPeerDiscussion={handleTriggerCustomDiscussion}
       />
 
+      {/* 4.8 Autonomous AI Software Factory (Semi-Automatic 2 CEO Gates + Live Preview) */}
+      <SoftwareFactoryModal
+        isOpen={isFactoryOpen}
+        onClose={() => setIsFactoryOpen(false)}
+        activeRun={activeFactoryRun}
+        onUpdateRun={setActiveFactoryRun}
+        onOpenWorkspace={(projId) => {
+          setWorkspaceProjectId(projId);
+          setIsWorkspaceOpen(true);
+        }}
+        onTriggerPeerDiscussion={handleTriggerCustomDiscussion}
+      />
+
       {/* 5. Kanban Board Modal */}
       <KanbanBoardModal
         isOpen={isKanbanOpen}
@@ -382,7 +404,7 @@ export default function StudioPage() {
       <WorkspaceExplorerModal
         isOpen={isWorkspaceOpen}
         onClose={() => setIsWorkspaceOpen(false)}
-        projectId="proj-nexus-01"
+        projectId={workspaceProjectId}
       />
 
       {/* 9. Mobile App Simulator & Native Build Pipelines */}

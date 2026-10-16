@@ -20,6 +20,7 @@ import {
   INITIAL_ROOMS_SPEC,
   Project,
   ServerToClientEvents,
+  SoftwareFactoryRun,
   Task,
   TaskPriority,
 } from '@nexusdev/shared';
@@ -28,6 +29,10 @@ import {
   getLLMProvider,
 } from '@nexusdev/agent-orchestrator';
 import { WorkspaceManager } from '@nexusdev/sandbox-runner';
+import {
+  buildInteractiveWebAppBundle,
+  detectTemplateType,
+} from './factoryGenerator';
 
 const app = express();
 const server = http.createServer(app);
@@ -62,6 +67,7 @@ let executiveDashboard: ExecutiveDashboardData = {
   departmentReports: [...INITIAL_EXECUTIVE_DASHBOARD.departmentReports],
 };
 const customTasks: Task[] = [];
+let activeFactoryRun: SoftwareFactoryRun | null = null;
 const workspaceManager = new WorkspaceManager();
 const workflowEngine = new SDLCWorkflowEngine(getLLMProvider(), workspaceManager);
 
@@ -283,6 +289,436 @@ app.post('/api/ceo/delegate-task', (req, res) => {
     task: newTask,
     discussion: delegationDiscussion,
   });
+});
+
+// ==========================================
+// Autonomous Software Factory Engine (Semi-Automated 2-Gate CEO Pipeline)
+// ==========================================
+
+function emitFactoryUpdate(run: SoftwareFactoryRun) {
+  run.updatedAt = new Date().toISOString();
+  io.emit('factory:updated', run);
+}
+
+function emitFactoryPeerDiscussion(params: {
+  initiatorId: AgentRole;
+  targetId: AgentRole;
+  topic: string;
+  skillA: string;
+  skillB: string;
+  lineA: string;
+  lineB: string;
+}) {
+  const initAgent = agentsRoster[params.initiatorId];
+  const targAgent = agentsRoster[params.targetId];
+  if (!initAgent || !targAgent) return;
+
+  const disc: AgentPeerDiscussion = {
+    id: `disc-factory-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    initiatorId: params.initiatorId,
+    targetId: params.targetId,
+    topic: params.topic,
+    skillApplied: `${params.skillA} & ${params.skillB}`,
+    locationLabel: `Meja ${targAgent.name} (${targAgent.department})`,
+    startedAt: new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    turns: [
+      {
+        speakerId: params.initiatorId,
+        speakerName: `${initAgent.name} (${initAgent.department.split(' ')[0]})`,
+        speakerColor: initAgent.color,
+        skillUsed: params.skillA,
+        text: params.lineA,
+      },
+      {
+        speakerId: params.targetId,
+        speakerName: `${targAgent.name} (${targAgent.department.split(' ')[0]})`,
+        speakerColor: targAgent.color,
+        skillUsed: params.skillB,
+        text: params.lineB,
+      },
+    ],
+  };
+
+  io.emit('office:peer_discussion', disc);
+}
+
+async function runFactoryPhase1(run: SoftwareFactoryRun) {
+  // Step 0: Anggi (PA) receives CEO brief and walks to Aria (PM)
+  run.status = 'PHASE_1_PLANNING';
+  run.currentStepIndex = 0;
+  run.steps[0].status = 'IN_PROGRESS';
+  emitFactoryUpdate(run);
+
+  emitFactoryPeerDiscussion({
+    initiatorId: 'AGT-PA',
+    targetId: 'AGT-PM',
+    topic: `Brief Aplikasi Baru CEO: ${run.appName}`,
+    skillA: '/context-engineering',
+    skillB: '/spec-driven-development',
+    lineA: `Aria, CEO memerintahkan pembuatan aplikasi "${run.appName}": "${run.prompt}". Mari kita susun spesifikasinya!`,
+    lineB: `Siap Anggi! Saya jalankan /spec-driven-development & /planning-and-task-breakdown untuk memecah fitur utamanya.`,
+  });
+
+  await workspaceManager.ensureWorkspace(run.projectId);
+  await workspaceManager.writeFile(
+    run.projectId,
+    'docs/PRD_SPEC.md',
+    `# Product Requirement Document (PRD) — ${run.appName}\n\n**CEO Brief:** ${run.prompt}\n**Disusun Oleh:** Anggi (PA) & Aria (PM) menggunakan \`/spec-driven-development\`\n\n## Daftar Modul Utama\n1. Dashboard KPI Real-time & Kalkulasi Otomatis\n2. Form Input & Validasi Data Interaktif\n3. Tabel Manajemen Data dengan Pencarian, Filter & Aksi Cepat\n4. Visualisasi Grafik Distribusi Kategori & Ekspor JSON\n`
+  );
+
+  setTimeout(async () => {
+    if (!activeFactoryRun || activeFactoryRun.id !== run.id) return;
+    run.steps[0].status = 'COMPLETED';
+    run.steps[0].timestamp = 'Selesai';
+    run.generatedFiles.push({
+      path: 'docs/PRD_SPEC.md',
+      author: 'AGT-PM',
+      skill: '/spec-driven-development',
+      description: 'Dokumen Spesifikasi Produk & Kriteria Penerimaan',
+    });
+
+    // Step 1: Aria (PM) walks to Viktor (CTO) & Kael (UI/UX) for Architecture + Anti-Slop UI Design
+    run.currentStepIndex = 1;
+    run.steps[1].status = 'IN_PROGRESS';
+    emitFactoryUpdate(run);
+
+    emitFactoryPeerDiscussion({
+      initiatorId: 'AGT-CTO',
+      targetId: 'AGT-UIUX',
+      topic: `Arsitektur & Desain UI Anti-Slop: ${run.appName}`,
+      skillA: '/security-and-hardening',
+      skillB: '/antislop-ui',
+      lineA: `Kael, saya sudah mengunci kontrak arsitektur & keamanan /security-and-hardening untuk "${run.appName}".`,
+      lineB: `Mantap Pak Viktor! Desain sistem /antislop-ui dan kontras aksesibilitas /antislop-human juga sudah siap dipresentasikan ke CEO.`,
+    });
+
+    await workspaceManager.writeFile(
+      run.projectId,
+      'docs/ARCHITECTURE_AND_UI.md',
+      `# Arsitektur & Desain UI/UX — ${run.appName}\n\n## Arsitektur Sistem (Viktor CTO)\n${run.architectureSummary}\n\n## Desain Visual & Ergonomi (Kael UI/UX)\n${run.uiDesignSummary}\n`
+    );
+
+    setTimeout(() => {
+      if (!activeFactoryRun || activeFactoryRun.id !== run.id) return;
+      run.steps[1].status = 'COMPLETED';
+      run.steps[1].timestamp = 'Selesai';
+      run.generatedFiles.push({
+        path: 'docs/ARCHITECTURE_AND_UI.md',
+        author: 'AGT-CTO',
+        skill: '/security-and-hardening & /antislop-ui',
+        description: 'Blueprint Arsitektur Keamanan & Desain Sistem UI/UX',
+      });
+
+      // Pause at CEO Gate 1!
+      run.status = 'WAITING_CEO_GATE_1';
+      emitFactoryUpdate(run);
+
+      io.emit('agent:speech', {
+        agentId: 'AGT-PA',
+        message: `CEO, rancangan fitur & arsitektur "${run.appName}" sudah siap! Mohon klik Approve di Gate 1 agar tim mulai menulis kode.`,
+        durationMs: 6000,
+      });
+    }, 3200);
+  }, 3200);
+}
+
+async function runFactoryPhase2(run: SoftwareFactoryRun) {
+  run.status = 'PHASE_2_BUILDING';
+  run.currentStepIndex = 2;
+  run.steps[2].status = 'IN_PROGRESS';
+  emitFactoryUpdate(run);
+
+  // Regenerate bundle incorporating any CEO feedback from Gate 1 or Gate 2
+  const bundle = buildInteractiveWebAppBundle({
+    appName: run.appName,
+    prompt: run.prompt,
+    templateType: run.templateType,
+    ceoFeedbackHistory: run.ceoFeedbackHistory,
+  });
+
+  run.architectureSummary = bundle.architectureSummary;
+  run.uiDesignSummary = bundle.uiDesignSummary;
+  run.previewHtml = bundle.previewHtml;
+
+  // Step 2: Nadia (FE) & Bima (BE) build Frontend + Backend + Live Interactive App
+  emitFactoryPeerDiscussion({
+    initiatorId: 'AGT-FE',
+    targetId: 'AGT-BE',
+    topic: `Implementasi Full-Stack: ${run.appName}`,
+    skillA: '/frontend-ui-engineering',
+    skillB: '/api-and-interface-design',
+    lineA: `Bima, komponen interaktif Next.js & state kalkulasi "${run.appName}" sedang saya rakit sesuai /frontend-ui-engineering.`,
+    lineB: `Siap Nadia! Endpoint REST API dan skema data /api-and-interface-design sudah tersambung mulus.`,
+  });
+
+  await workspaceManager.writeFile(
+    run.projectId,
+    'apps/web/src/app/page.tsx',
+    bundle.nextjsPageCode
+  );
+  await workspaceManager.writeFile(
+    run.projectId,
+    'apps/server/src/routes.js',
+    bundle.backendApiCode
+  );
+  await workspaceManager.writeFile(
+    run.projectId,
+    'dist/live-app.html',
+    bundle.previewHtml
+  );
+
+  setTimeout(async () => {
+    if (!activeFactoryRun || activeFactoryRun.id !== run.id) return;
+    run.steps[2].status = 'COMPLETED';
+    run.steps[2].timestamp = 'Selesai';
+
+    const existingPaths = new Set(run.generatedFiles.map((f) => f.path));
+    if (!existingPaths.has('apps/web/src/app/page.tsx')) {
+      run.generatedFiles.push(
+        {
+          path: 'apps/web/src/app/page.tsx',
+          author: 'AGT-FE',
+          skill: '/frontend-ui-engineering',
+          description: 'Komponen Utama Aplikasi Web Next.js 15',
+        },
+        {
+          path: 'apps/server/src/routes.js',
+          author: 'AGT-BE',
+          skill: '/api-and-interface-design',
+          description: 'Controller REST API & Penyimpanan Data',
+        },
+        {
+          path: 'dist/live-app.html',
+          author: 'AGT-FE',
+          skill: '/performance-optimization',
+          description: 'Bundel Aplikasi Web Interaktif Siap Pakai (Live Runner)',
+        }
+      );
+    }
+
+    // Step 3: Sinta (QA) & Dion (DevOps) run TDD verification & CI/CD build packaging
+    run.currentStepIndex = 3;
+    run.steps[3].status = 'IN_PROGRESS';
+    emitFactoryUpdate(run);
+
+    emitFactoryPeerDiscussion({
+      initiatorId: 'AGT-QA',
+      targetId: 'AGT-OPS',
+      topic: `Verifikasi QA & Build Live Preview: ${run.appName}`,
+      skillA: '/test-driven-development',
+      skillB: '/ci-cd-and-automation',
+      lineA: `Dion, seluruh test interaktif form, tabel, dan kalkulasi "${run.appName}" lulus 100% sesuai /test-driven-development!`,
+      lineB: `Luar biasa Sinta! Pipeline /ci-cd-and-automation hijau. Aplikasi sekarang siap dicoba langsung oleh CEO!`,
+    });
+
+    await workspaceManager.writeFile(
+      run.projectId,
+      'tests/app.e2e.spec.ts',
+      bundle.playwrightTestCode
+    );
+
+    setTimeout(() => {
+      if (!activeFactoryRun || activeFactoryRun.id !== run.id) return;
+      run.steps[3].status = 'COMPLETED';
+      run.steps[3].timestamp = 'Selesai';
+      if (!run.generatedFiles.some((f) => f.path === 'tests/app.e2e.spec.ts')) {
+        run.generatedFiles.push({
+          path: 'tests/app.e2e.spec.ts',
+          author: 'AGT-QA',
+          skill: '/test-driven-development',
+          description: 'Suite Pengujian E2E Otomatis Playwright/Jest',
+        });
+      }
+
+      // Pause at CEO Gate 2 (Live App Preview & Release Sign-Off)
+      run.status = 'WAITING_CEO_GATE_2';
+      emitFactoryUpdate(run);
+
+      io.emit('agent:speech', {
+        agentId: 'AGT-PA',
+        message: `CEO! Aplikasi "${run.appName}" sudah selesai dibangun & lulus QA! Silakan coba langsung di Live App Preview!`,
+        durationMs: 6500,
+      });
+    }, 3200);
+  }, 3400);
+}
+
+app.get('/api/factory/current', (req, res) => {
+  res.json({ run: activeFactoryRun });
+});
+
+app.post('/api/factory/start', async (req, res) => {
+  try {
+    const { appName, prompt } = req.body as { appName?: string; prompt?: string };
+    const cleanPrompt =
+      (prompt && prompt.trim()) ||
+      'Aplikasi Web Kasir POS Kafe lengkap dengan keranjang, perhitungan omzet, dan grafik kategori';
+    const cleanName =
+      (appName && appName.trim()) ||
+      cleanPrompt.split(' ').slice(0, 4).join(' ');
+
+    const projectId = `app-${Date.now()}`;
+    const templateType = detectTemplateType(`${cleanName} ${cleanPrompt}`);
+    const initialBundle = buildInteractiveWebAppBundle({
+      appName: cleanName,
+      prompt: cleanPrompt,
+      templateType,
+      ceoFeedbackHistory: [],
+    });
+
+    const newRun: SoftwareFactoryRun = {
+      id: `factory-${Date.now()}`,
+      projectId,
+      appName: cleanName,
+      prompt: cleanPrompt,
+      templateType,
+      status: 'PHASE_1_PLANNING',
+      currentStepIndex: 0,
+      architectureSummary: initialBundle.architectureSummary,
+      uiDesignSummary: initialBundle.uiDesignSummary,
+      previewHtml: initialBundle.previewHtml,
+      generatedFiles: [],
+      revisionCount: 0,
+      ceoFeedbackHistory: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      steps: [
+        {
+          id: 'step-1-spec',
+          phase: 1,
+          agentId: 'AGT-PA',
+          partnerId: 'AGT-PM',
+          title: '1. Analisis Brief CEO & Spesifikasi Produk (Anggi PA & Aria PM)',
+          skillUsed: '/context-engineering & /spec-driven-development',
+          status: 'PENDING',
+          outputFile: 'docs/PRD_SPEC.md',
+          summary: 'Menerjemahkan perintah CEO menjadi spesifikasi fitur & backlog terukur.',
+        },
+        {
+          id: 'step-2-arch',
+          phase: 1,
+          agentId: 'AGT-CTO',
+          partnerId: 'AGT-UIUX',
+          title: '2. Desain Arsitektur, Keamanan & Anti-Slop UI (Viktor CTO & Kael UI/UX)',
+          skillUsed: '/security-and-hardening & /antislop-ui',
+          status: 'PENDING',
+          outputFile: 'docs/ARCHITECTURE_AND_UI.md',
+          summary: 'Merancang kontrak API, skema data, dan sistem desain bebas AI-slop.',
+        },
+        {
+          id: 'step-3-dev',
+          phase: 2,
+          agentId: 'AGT-FE',
+          partnerId: 'AGT-BE',
+          title: '3. Konstruksi Kode Full-Stack & Interactive App (Nadia FE & Bima BE)',
+          skillUsed: '/frontend-ui-engineering & /api-and-interface-design',
+          status: 'PENDING',
+          outputFile: 'apps/web/src/app/page.tsx',
+          summary: 'Menulis komponen UI interaktif, kalkulasi state, dan endpoint REST API.',
+        },
+        {
+          id: 'step-4-qa',
+          phase: 2,
+          agentId: 'AGT-QA',
+          partnerId: 'AGT-OPS',
+          title: '4. Pengujian TDD Otomatis & Bundling Live Preview (Sinta QA & Dion DevOps)',
+          skillUsed: '/test-driven-development & /ci-cd-and-automation',
+          status: 'PENDING',
+          outputFile: 'dist/live-app.html',
+          summary: 'Menjalankan verifikasi E2E dan mem-build aplikasi agar siap dijalankan CEO.',
+        },
+      ],
+    };
+
+    activeFactoryRun = newRun;
+    activeProject = {
+      id: projectId,
+      name: cleanName,
+      description: cleanPrompt,
+      status: 'IN_PROGRESS',
+      platform: 'WEB',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    runFactoryPhase1(newRun).catch(console.error);
+    res.json({ run: newRun });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to start software factory' });
+  }
+});
+
+app.post('/api/factory/gate1-decision', async (req, res) => {
+  try {
+    const { decision, feedback } = req.body as {
+      decision: 'APPROVE' | 'REVISE';
+      feedback?: string;
+    };
+    if (!activeFactoryRun) {
+      return res.status(404).json({ error: 'Tidak ada proses pabrik aplikasi yang aktif' });
+    }
+
+    if (feedback && feedback.trim()) {
+      activeFactoryRun.ceoFeedbackHistory.push(feedback.trim());
+    }
+
+    if (decision === 'REVISE') {
+      activeFactoryRun.revisionCount += 1;
+      const updatedBundle = buildInteractiveWebAppBundle({
+        appName: activeFactoryRun.appName,
+        prompt: activeFactoryRun.prompt,
+        templateType: activeFactoryRun.templateType,
+        ceoFeedbackHistory: activeFactoryRun.ceoFeedbackHistory,
+      });
+      activeFactoryRun.architectureSummary = updatedBundle.architectureSummary;
+      activeFactoryRun.uiDesignSummary = updatedBundle.uiDesignSummary;
+      activeFactoryRun.previewHtml = updatedBundle.previewHtml;
+    }
+
+    // Proceed to Phase 2 (Coding, QA, DevOps & Live Preview)
+    runFactoryPhase2(activeFactoryRun).catch(console.error);
+    res.json({ run: activeFactoryRun });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/factory/gate2-decision', async (req, res) => {
+  try {
+    const { decision, feedback } = req.body as {
+      decision: 'APPROVE_RELEASE' | 'REQUEST_REVISION';
+      feedback?: string;
+    };
+    if (!activeFactoryRun) {
+      return res.status(404).json({ error: 'Tidak ada proses pabrik aplikasi yang aktif' });
+    }
+
+    if (decision === 'REQUEST_REVISION') {
+      activeFactoryRun.revisionCount += 1;
+      if (feedback && feedback.trim()) {
+        activeFactoryRun.ceoFeedbackHistory.push(feedback.trim());
+      }
+      runFactoryPhase2(activeFactoryRun).catch(console.error);
+      return res.json({ run: activeFactoryRun });
+    }
+
+    activeFactoryRun.status = 'RELEASED';
+    activeProject.status = 'COMPLETED';
+    emitFactoryUpdate(activeFactoryRun);
+
+    io.emit('agent:speech', {
+      agentId: 'AGT-OPS',
+      message: `Rilis Produksi "${activeFactoryRun.appName}" resmi disetujui CEO! Aplikasi berstatus LIVE!`,
+      durationMs: 5500,
+    });
+
+    res.json({ run: activeFactoryRun });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/agents', (req, res) => {
@@ -543,6 +979,7 @@ io.on('connection', (socket) => {
     rooms: INITIAL_ROOMS_SPEC,
     activeProject,
     tasks: workflowEngine.getTasks(),
+    activeFactoryRun,
   });
 
   // 2. Player movement sync

@@ -10,11 +10,14 @@ import {
   FolderCode,
   Smartphone,
   Briefcase,
+  Rocket,
 } from 'lucide-react';
-import { RoomZone } from '@nexusdev/shared';
+import { RoomZone, SoftwareFactoryStatus } from '@nexusdev/shared';
 
 interface HeaderHUDProps {
   currentRoom: RoomZone | null;
+  onOpenFactory: () => void;
+  factoryStatus?: SoftwareFactoryStatus;
   onOpenCEOCommand: () => void;
   onOpenMeeting: () => void;
   onOpenKanban: () => void;
@@ -27,6 +30,8 @@ interface HeaderHUDProps {
 
 export default function HeaderHUD({
   currentRoom,
+  onOpenFactory,
+  factoryStatus,
   onOpenCEOCommand,
   onOpenMeeting,
   onOpenKanban,
@@ -36,6 +41,10 @@ export default function HeaderHUD({
   activeAgentsCount,
   isConnected = false,
 }: HeaderHUDProps) {
+  const needsGateAction =
+    factoryStatus === 'WAITING_CEO_GATE_1' ||
+    factoryStatus === 'WAITING_CEO_GATE_2';
+
   return (
     <header className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
       {/* Left: Studio Branding & Project Badge */}
@@ -68,7 +77,7 @@ export default function HeaderHUD({
 
       {/* Center: Current Room Location HUD */}
       {currentRoom && (
-        <div className="hidden xl:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-full px-4 py-1.5 shadow-lg pointer-events-auto transition-all animate-in fade-in zoom-in-95">
+        <div className="hidden 2xl:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-full px-4 py-1.5 shadow-lg pointer-events-auto transition-all animate-in fade-in zoom-in-95">
           <MapPin
             className="w-4 h-4"
             style={{ color: currentRoom.color }}
@@ -85,21 +94,35 @@ export default function HeaderHUD({
       {/* Right: Quick Action Buttons */}
       <div className="flex items-center gap-2 pointer-events-auto">
         <button
+          onClick={onOpenFactory}
+          className="relative flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white border border-emerald-400/40 rounded-xl px-3.5 py-2 text-xs font-extrabold shadow-lg shadow-emerald-600/30 transition-all"
+          title="Perintahkan Tim Agen Membuat Aplikasi Web & Jalankan Langsung (Live App Preview)"
+        >
+          <Rocket className="w-4 h-4" />
+          <span>Buat Aplikasi Web</span>
+          {needsGateAction && (
+            <span className="px-1.5 py-0.5 text-[9px] font-mono bg-amber-400 text-slate-950 font-black rounded-full animate-bounce">
+              APPROVE CEO!
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={onOpenCEOCommand}
           className="flex items-center gap-2 bg-gradient-to-r from-rose-600/90 to-pink-600/90 hover:from-rose-500 hover:to-pink-500 text-white border border-rose-400/30 rounded-xl px-3.5 py-2 text-xs font-bold shadow-lg shadow-rose-600/25 transition-all"
           title="Buka CEO Command Center: Jadwal, Tugas & Laporan Eksekutif dari Anggi (PA)"
         >
           <Briefcase className="w-4 h-4" />
-          <span>Dashboard CEO & Anggi</span>
+          <span className="hidden lg:inline">Dashboard CEO & Anggi</span>
         </button>
 
         <button
           onClick={onOpenRoster}
-          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
+          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
           title="Lihat Daftar Tim Agen AI"
         >
           <Users className="w-4 h-4 text-cyan-400" />
-          <span className="hidden sm:inline">Tim Agen</span>
+          <span className="hidden md:inline">Tim</span>
           <span className="px-1.5 py-0.5 text-[10px] bg-slate-800 rounded-md text-cyan-300 font-mono">
             {activeAgentsCount}
           </span>
@@ -107,38 +130,38 @@ export default function HeaderHUD({
 
         <button
           onClick={onOpenKanban}
-          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
+          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
           title="Papan Kanban Proyek"
         >
           <Kanban className="w-4 h-4 text-amber-400" />
-          <span className="hidden sm:inline">Kanban</span>
+          <span className="hidden md:inline">Kanban</span>
         </button>
 
         <button
           onClick={onOpenWorkspace}
-          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
+          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
           title="Lihat Berkas Kode Proyek & Sandbox Terminal"
         >
           <FolderCode className="w-4 h-4 text-emerald-400" />
-          <span className="hidden sm:inline">Workspace</span>
+          <span className="hidden md:inline">Workspace</span>
         </button>
 
         <button
           onClick={onOpenMobileSimulator}
-          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
+          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/60 rounded-xl px-3 py-2 text-xs font-semibold shadow-lg transition-all hover:border-slate-600"
           title="Buka Simulator Mobile Android & iOS"
         >
           <Smartphone className="w-4 h-4 text-indigo-400" />
-          <span className="hidden sm:inline">Mobile</span>
+          <span className="hidden xl:inline">Mobile</span>
         </button>
 
         <button
           onClick={onOpenMeeting}
-          className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl px-4 py-2 text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all hover:shadow-indigo-500/50"
+          className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl px-3.5 py-2 text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all hover:shadow-indigo-500/50"
           title="Panggil Rapat Semua Agen di Ruang Rapat"
         >
           <Video className="w-4 h-4" />
-          <span>Panggil Rapat</span>
+          <span className="hidden sm:inline">Rapat</span>
         </button>
       </div>
     </header>

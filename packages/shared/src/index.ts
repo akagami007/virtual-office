@@ -268,6 +268,57 @@ export interface ExecutiveDashboardData {
   };
 }
 
+export type SoftwareFactoryStepStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'WAITING_CEO'
+  | 'COMPLETED';
+
+export interface SoftwareFactoryStep {
+  id: string;
+  phase: 1 | 2;
+  agentId: AgentRole;
+  partnerId?: AgentRole;
+  title: string;
+  skillUsed: string;
+  status: SoftwareFactoryStepStatus;
+  outputFile?: string;
+  summary: string;
+  timestamp?: string;
+}
+
+export type SoftwareFactoryStatus =
+  | 'IDLE'
+  | 'PHASE_1_PLANNING'
+  | 'WAITING_CEO_GATE_1'
+  | 'PHASE_2_BUILDING'
+  | 'WAITING_CEO_GATE_2'
+  | 'RELEASED';
+
+export interface SoftwareFactoryRun {
+  id: string;
+  projectId: string;
+  appName: string;
+  prompt: string;
+  templateType: 'POS_CAFE' | 'CRM_PIPELINE' | 'ANALYTICS_DASHBOARD' | 'ECOMMERCE_STORE' | 'CUSTOM_WEB_APP';
+  status: SoftwareFactoryStatus;
+  currentStepIndex: number;
+  steps: SoftwareFactoryStep[];
+  architectureSummary: string;
+  uiDesignSummary: string;
+  generatedFiles: Array<{
+    path: string;
+    author: AgentRole;
+    skill: string;
+    description: string;
+  }>;
+  previewHtml: string;
+  revisionCount: number;
+  ceoFeedbackHistory: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ServerToClientEvents {
   'office:init': (data: {
     agents: Record<AgentRole, AgentProfile>;
@@ -275,6 +326,7 @@ export interface ServerToClientEvents {
     activeProject: Project;
     tasks: Task[];
     activeMeeting?: MeetingSession;
+    activeFactoryRun?: SoftwareFactoryRun | null;
   }) => void;
   'player:moved': (data: { id: string; x: number; y: number; direction: string }) => void;
   'agent:status_updated': (data: {
@@ -285,6 +337,7 @@ export interface ServerToClientEvents {
   }) => void;
   'agent:speech': (data: { agentId: AgentRole; message: string; durationMs: number }) => void;
   'office:peer_discussion': (discussion: AgentPeerDiscussion) => void;
+  'factory:updated': (run: SoftwareFactoryRun) => void;
   'meeting:started': (meeting: MeetingSession) => void;
   'meeting:message': (message: ChatMessage) => void;
   'meeting:ended': (data: { meetingId: string; summary?: string }) => void;
