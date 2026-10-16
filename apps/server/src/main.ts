@@ -1,10 +1,15 @@
 import express from 'express';
 import http from 'http';
+import fs from 'fs/promises';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import {
+  AGENT_SKILLS_REGISTRY,
+  AUTONOMOUS_PEER_DISCUSSIONS,
+  AgentPeerDiscussion,
   AgentProfile,
   AgentRole,
+  AgentSkillSpec,
   ApprovalGate,
   ChatMessage,
   ClientToServerEvents,
@@ -53,6 +58,46 @@ const workflowEngine = new SDLCWorkflowEngine(getLLMProvider(), workspaceManager
 // Auto-seed initial project workspace
 workspaceManager.scaffoldProject(activeProject.id, 'FULLSTACK').catch(console.error);
 
+// Helper to find skill spec and load real SKILL.md content from disk
+async function loadSkillMarkdown(skillIdOrCommand: string): Promise<{
+  spec: AgentSkillSpec | null;
+  rawMarkdown: string;
+}> {
+  const cleanId = skillIdOrCommand.replace(/^\//, '').trim();
+  let foundSpec: AgentSkillSpec | null = null;
+
+  for (const list of Object.values(AGENT_SKILLS_REGISTRY)) {
+    const match = list.find((s) => s.id === cleanId || s.slashCommand === `/${cleanId}`);
+    if (match) {
+      foundSpec = match;
+      break;
+    }
+  }
+
+  const candidatePaths = foundSpec
+    ? [foundSpec.skillPath]
+    : [
+        `/Users/akagami/.gemini/config/skills/${cleanId}/SKILL.md`,
+        `/Users/akagami/.gemini/antigravity/builtin/skills/${cleanId}/SKILL.md`,
+      ];
+
+  for (const p of candidatePaths) {
+    try {
+      const content = await fs.readFile(p, 'utf-8');
+      return { spec: foundSpec, rawMarkdown: content };
+    } catch {
+      // continue
+    }
+  }
+
+  return {
+    spec: foundSpec,
+    rawMarkdown: foundSpec
+      ? `# ${foundSpec.name} (${foundSpec.slashCommand})\n\n${foundSpec.description}\n\n## Core Rules\n${foundSpec.keyRules.map((r) => `- ${r}`).join('\n')}`
+      : '',
+  };
+}
+
 // ==========================================
 // REST API Routes
 // ==========================================
@@ -100,6 +145,22 @@ app.get('/api/agents', (req, res) => {
   res.json(Object.values(agentsRoster));
 });
 
+app.get('/api/skills/:skillId', async (req, res) => {
+  try {
+    const { spec, rawMarkdown } = await loadSkillMarkdown(req.params.skillId);
+    if (!spec && !rawMarkdown) {
+      return res.status(404).json({ error: `Skill ${req.params.skillId} not found` });
+    }
+    res.json({
+      skillId: req.params.skillId,
+      spec,
+      rawMarkdown: rawMarkdown.slice(0, 3500),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to read SKILL.md' });
+  }
+});
+
 app.post('/api/agents/:agentId/chat', async (req, res) => {
   try {
     const agentId = req.params.agentId as AgentRole;
@@ -113,10 +174,25 @@ app.post('/api/agents/:agentId/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
+    const assignedSkills = AGENT_SKILLS_REGISTRY[agentId] || [];
+    let skillContext = `Assigned Agent Skills: ${assignedSkills.map((s) => `${s.slashCommand} (${s.name})`).join(', ')}`;
+
+    // If user message mentions a specific /skill or matches an assigned skill, load its real SKILL.md excerpt
+    const matchedSkill =
+      assignedSkills.find((s) => String(message).includes(s.slashCommand) || String(message).includes(s.id)) ||
+      assignedSkills[0];
+    if (matchedSkill) {
+      const { rawMarkdown } = await loadSkillMarkdown(matchedSkill.id);
+      if (rawMarkdown) {
+        skillContext += `\n\nActive Skill Reference (${matchedSkill.slashCommand}):\n${rawMarkdown.slice(0, 1200)}`;
+      }
+    }
+
     const llm = getLLMProvider();
     const reply = await llm.generateText({
       agentRole: agentId,
       prompt: String(message),
+      context: skillContext,
     });
 
     // Emit speech bubble and activity update to connected 2D canvases
@@ -129,11 +205,89 @@ app.post('/api/agents/:agentId/chat', async (req, res) => {
     res.json({
       agentId,
       agentName: profile.name,
+      skillUsed: matchedSkill?.slashCommand,
       reply,
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to process agent chat' });
+  }
+});
+
+app.post('/api/office/collaborate', async (req, res) => {
+  try {
+    const { initiatorId, targetId, skillCommand, customTopic } = req.body as {
+      initiatorId?: AgentRole;
+      targetId?: AgentRole;
+      skillCommand?: string;
+      customTopic?: string;
+    };
+
+    // Find matching curated discussion or construct a custom skill-driven peer discussion
+    let template = AUTONOMOUS_PEER_DISCUSSIONS.find(
+      (d) =>
+        (!initiatorId || d.initiatorId === initiatorId) &&
+        (!targetId || d.targetId === targetId) &&
+        (!skillCommand || d.skillApplied.includes(skillCommand))
+    );
+
+    if (!template && initiatorId && targetId && agentsRoster[initiatorId] && agentsRoster[targetId]) {
+      const initAgent = agentsRoster[initiatorId];
+      const targAgent = agentsRoster[targetId];
+      const initSkills = AGENT_SKILLS_REGISTRY[initiatorId] || [];
+      const targSkills = AGENT_SKILLS_REGISTRY[targetId] || [];
+      const primarySkill =
+        initSkills.find((s) => s.slashCommand === skillCommand) ||
+        initSkills[0] || { slashCommand: '/collaboration', name: 'Cross-Team Sync', keyRules: ['Sinkronisasi modul'] };
+      const partnerSkill = targSkills[0] || { slashCommand: '/verification', name: 'Partner Review', keyRules: ['Validasi kontrak'] };
+
+      template = {
+        initiatorId,
+        targetId,
+        topic: customTopic || `Kolaborasi ${primarySkill.slashCommand} bersama ${targAgent.name}`,
+        skillApplied: `${primarySkill.slashCommand} & ${partnerSkill.slashCommand}`,
+        locationLabel: `Meja ${targAgent.name} (${targAgent.department})`,
+        turns: [
+          {
+            speakerId: initiatorId,
+            speakerName: `${initAgent.name} (${initAgent.department.split(' ')[0]})`,
+            speakerColor: initAgent.color,
+            skillUsed: primarySkill.slashCommand,
+            text: `Halo ${targAgent.name}, saya menerapkan ${primarySkill.slashCommand}: "${primarySkill.keyRules[0] || primarySkill.description}". Bagaimana sinkronisasinya di sisi Anda?`,
+          },
+          {
+            speakerId: targetId,
+            speakerName: `${targAgent.name} (${targAgent.department.split(' ')[0]})`,
+            speakerColor: targAgent.color,
+            skillUsed: partnerSkill.slashCommand,
+            text: `Siap ${initAgent.name}! Dari sisi ${partnerSkill.slashCommand}, saya pastikan "${partnerSkill.keyRules[0] || partnerSkill.description}" berjalan selaras.`,
+          },
+          {
+            speakerId: initiatorId,
+            speakerName: `${initAgent.name} (${initAgent.department.split(' ')[0]})`,
+            speakerColor: initAgent.color,
+            skillUsed: primarySkill.slashCommand,
+            text: `Bagus! Standar ${primarySkill.slashCommand} & ${partnerSkill.slashCommand} sudah terhubung. Saya kembali ke meja untuk lanjut eksekusi.`,
+          },
+        ],
+      };
+    }
+
+    if (!template) {
+      const randomIndex = Math.floor(Math.random() * AUTONOMOUS_PEER_DISCUSSIONS.length);
+      template = AUTONOMOUS_PEER_DISCUSSIONS[randomIndex];
+    }
+
+    const discussion: AgentPeerDiscussion = {
+      ...template,
+      id: `disc-${Date.now()}`,
+      startedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    };
+
+    io.emit('office:peer_discussion', discussion);
+    res.json(discussion);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to trigger peer discussion' });
   }
 });
 

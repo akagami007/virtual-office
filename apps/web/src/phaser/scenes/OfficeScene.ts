@@ -1,8 +1,10 @@
 import * as Phaser from 'phaser';
 import {
+  AgentPeerDiscussion,
   AgentProfile,
   AgentRole,
   AgentState,
+  AUTONOMOUS_PEER_DISCUSSIONS,
   INITIAL_AGENTS_ROSTER,
   INITIAL_ROOMS_SPEC,
   RoomId,
@@ -14,6 +16,7 @@ export interface SceneCallbacks {
   onRoomEnter?: (room: RoomZone) => void;
   onPlayerMove?: (pos: { x: number; y: number }) => void;
   onMeetingTriggered?: (topic: string) => void;
+  onPeerDiscussionStarted?: (discussion: AgentPeerDiscussion) => void;
 }
 
 export class OfficeScene extends Phaser.Scene {
@@ -32,10 +35,17 @@ export class OfficeScene extends Phaser.Scene {
     statusText: Phaser.GameObjects.Text;
     statusBg: Phaser.GameObjects.Graphics;
     speechBubble?: Phaser.GameObjects.Container;
+    activeBubbleType?: 'proximity' | 'dialogue';
   }> = new Map();
 
   private isMeetingActive: boolean = false;
   private isKeyboardBlocked: boolean = false;
+  private isAutonomousEnabled: boolean = true;
+  private isPeerDiscussionPlaying: boolean = false;
+  private peerDiscussionIndex: number = 0;
+  private peerLinkGraphics!: Phaser.GameObjects.Graphics;
+  private activePeerPair: { a: AgentRole; b: AgentRole; color: number } | null = null;
+  private peerTimers: Phaser.Time.TimerEvent[] = [];
   private currentRoom: RoomId | null = null;
   private callbacks: SceneCallbacks = {};
 
@@ -77,6 +87,10 @@ export class OfficeScene extends Phaser.Scene {
     // 2. Build Floorplan, Walls, and Furniture
     this.buildOfficeFloorplan();
 
+    // 2.5 Connection line graphics for peer-to-peer discussions
+    this.peerLinkGraphics = this.add.graphics();
+    this.peerLinkGraphics.setDepth(3.5);
+
     // 3. Spawn AI Agents at their desks
     this.spawnAgents();
 
@@ -91,6 +105,9 @@ export class OfficeScene extends Phaser.Scene {
     // 6. Setup Keyboard & Mouse Inputs
     this.setupControls();
 
+    // 7. Start Living Office Autonomous Discussion Loop
+    this.setupAutonomousLoop();
+
     // Expose scene to window for React bridge
     if (typeof window !== 'undefined') {
       (window as unknown as { __NEXUS_SCENE__?: OfficeScene }).__NEXUS_SCENE__ = this;
@@ -101,6 +118,7 @@ export class OfficeScene extends Phaser.Scene {
     this.handlePlayerMovement();
     this.checkRoomProximity();
     this.checkAgentProximity();
+    this.updateSpeechBubblesAndPeerLinks();
   }
 
   // ==========================================
@@ -554,6 +572,9 @@ export class OfficeScene extends Phaser.Scene {
 
   private checkAgentProximity() {
     this.agentsMap.forEach((agent) => {
+      // Do not overwrite an active dialogue speech bubble with proximity prompt
+      if (agent.activeBubbleType === 'dialogue') return;
+
       const dist = Phaser.Math.Distance.Between(
         this.player.x,
         this.player.y,
@@ -567,9 +588,10 @@ export class OfficeScene extends Phaser.Scene {
           this.showProximityBubble(agent);
         }
       } else {
-        if (agent.speechBubble) {
+        if (agent.speechBubble && agent.activeBubbleType === 'proximity') {
           agent.speechBubble.destroy();
           agent.speechBubble = undefined;
+          agent.activeBubbleType = undefined;
         }
       }
     });
@@ -579,6 +601,7 @@ export class OfficeScene extends Phaser.Scene {
     container: Phaser.GameObjects.Container;
     profile: AgentProfile;
     speechBubble?: Phaser.GameObjects.Container;
+    activeBubbleType?: 'proximity' | 'dialogue';
   }) {
     const bubble = this.add.container(agent.container.x, agent.container.y - 48);
     bubble.setDepth(10);
@@ -598,6 +621,228 @@ export class OfficeScene extends Phaser.Scene {
 
     bubble.add([bg, text]);
     agent.speechBubble = bubble;
+    agent.activeBubbleType = 'proximity';
+  }
+
+  private updateSpeechBubblesAndPeerLinks() {
+    // Keep speech bubbles anchored above moving agent containers
+    this.agentsMap.forEach((agent) => {
+      if (agent.speechBubble) {
+        const yOffset = agent.activeBubbleType === 'dialogue' ? -54 : -48;
+        agent.speechBubble.setPosition(agent.container.x, agent.container.y + yOffset);
+      }
+    });
+
+    // Draw glowing collaboration line between conversing agents
+    if (this.peerLinkGraphics) {
+      this.peerLinkGraphics.clear();
+      if (this.activePeerPair) {
+        const agentA = this.agentsMap.get(this.activePeerPair.a);
+        const agentB = this.agentsMap.get(this.activePeerPair.b);
+        if (agentA && agentB) {
+          this.peerLinkGraphics.lineStyle(2, this.activePeerPair.color, 0.55);
+          this.peerLinkGraphics.lineBetween(
+            agentA.container.x,
+            agentA.container.y,
+            agentB.container.x,
+            agentB.container.y
+          );
+          this.peerLinkGraphics.fillStyle(this.activePeerPair.color, 0.85);
+          this.peerLinkGraphics.fillCircle(agentA.container.x, agentA.container.y, 4);
+          this.peerLinkGraphics.fillCircle(agentB.container.x, agentB.container.y, 4);
+        }
+      }
+    }
+  }
+
+  private setupAutonomousLoop() {
+    // Trigger initial peer discussion 3.5 seconds after studio boot
+    this.time.delayedCall(3500, () => {
+      if (this.isAutonomousEnabled && !this.isMeetingActive && !this.isPeerDiscussionPlaying) {
+        this.triggerRandomPeerDiscussion();
+      }
+    });
+
+    // Periodic living office cycle every 20 seconds
+    this.time.addEvent({
+      delay: 20000,
+      loop: true,
+      callback: () => {
+        if (this.isAutonomousEnabled && !this.isMeetingActive && !this.isPeerDiscussionPlaying) {
+          this.triggerRandomPeerDiscussion();
+        }
+      },
+    });
+  }
+
+  public setAutonomousEnabled(enabled: boolean) {
+    this.isAutonomousEnabled = enabled;
+  }
+
+  public getAutonomousEnabled(): boolean {
+    return this.isAutonomousEnabled;
+  }
+
+  public triggerRandomPeerDiscussion(): AgentPeerDiscussion | null {
+    if (this.isMeetingActive) return null;
+    const preset =
+      AUTONOMOUS_PEER_DISCUSSIONS[this.peerDiscussionIndex % AUTONOMOUS_PEER_DISCUSSIONS.length];
+    this.peerDiscussionIndex += 1;
+
+    const discussion: AgentPeerDiscussion = {
+      ...preset,
+      id: `disc-auto-${Date.now()}`,
+      startedAt: new Date().toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    this.playPeerDiscussion(discussion);
+    return discussion;
+  }
+
+  private clearActivePeerTimers() {
+    this.peerTimers.forEach((t) => t.remove(false));
+    this.peerTimers = [];
+  }
+
+  public playPeerDiscussion(discussion: AgentPeerDiscussion, panCamera: boolean = false) {
+    if (this.isMeetingActive) return;
+
+    const initiator = this.agentsMap.get(discussion.initiatorId);
+    const target = this.agentsMap.get(discussion.targetId);
+    if (!initiator || !target) return;
+
+    // Cancel any previous peer discussion timers and reset previous pair to desks
+    this.clearActivePeerTimers();
+    if (this.activePeerPair) {
+      const prevA = this.agentsMap.get(this.activePeerPair.a);
+      const prevB = this.agentsMap.get(this.activePeerPair.b);
+      if (prevA && prevA.profile.id !== initiator.profile.id && prevA.profile.id !== target.profile.id) {
+        this.tweens.add({
+          targets: prevA.container,
+          x: prevA.profile.deskPosition.x,
+          y: prevA.profile.deskPosition.y - 12,
+          duration: 800,
+        });
+      }
+      if (prevB && prevB.profile.id !== initiator.profile.id && prevB.profile.id !== target.profile.id) {
+        this.tweens.add({
+          targets: prevB.container,
+          x: prevB.profile.deskPosition.x,
+          y: prevB.profile.deskPosition.y - 12,
+          duration: 800,
+        });
+      }
+    }
+
+    this.isPeerDiscussionPlaying = true;
+    const lineColor = Phaser.Display.Color.HexStringToColor(initiator.profile.color).color;
+    this.activePeerPair = {
+      a: discussion.initiatorId,
+      b: discussion.targetId,
+      color: lineColor,
+    };
+
+    // Notify React UI Feed Panel
+    if (this.callbacks.onPeerDiscussionStarted) {
+      this.callbacks.onPeerDiscussionStarted(discussion);
+    }
+
+    // Save original states
+    const origInitiatorState = initiator.profile.state;
+    const origTargetState = target.profile.state;
+    this.updateAgentState(discussion.initiatorId, 'REVIEWING');
+    this.updateAgentState(discussion.targetId, 'THINKING');
+
+    // Determine meeting coordinates: Coffee Lounge break vs Target's Desk
+    let destInitiatorX = target.profile.deskPosition.x - 42;
+    let destInitiatorY = target.profile.deskPosition.y - 8;
+    let destTargetX = target.profile.deskPosition.x;
+    let destTargetY = target.profile.deskPosition.y - 12;
+
+    if (discussion.isLoungeBreak) {
+      destInitiatorX = 735;
+      destInitiatorY = 552;
+      destTargetX = 790;
+      destTargetY = 552;
+    } else {
+      // Keep inside room bounds nicely
+      if (destInitiatorX < 55) destInitiatorX = target.profile.deskPosition.x + 42;
+    }
+
+    if (panCamera) {
+      this.cameras.main.pan(
+        (destInitiatorX + destTargetX) / 2,
+        (destInitiatorY + destTargetY) / 2,
+        650,
+        'Power2'
+      );
+    }
+
+    // Walk initiator (and target if Lounge break) to destination
+    this.tweens.add({
+      targets: initiator.container,
+      x: destInitiatorX,
+      y: destInitiatorY,
+      duration: 1350,
+      ease: 'Sine.easeInOut',
+    });
+
+    if (discussion.isLoungeBreak) {
+      this.tweens.add({
+        targets: target.container,
+        x: destTargetX,
+        y: destTargetY,
+        duration: 1350,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    // Schedule each dialogue turn sequentially after arrival
+    const turnIntervalMs = 3400;
+    const arrivalDelayMs = 1450;
+
+    discussion.turns.forEach((turn, idx) => {
+      const timer = this.time.delayedCall(arrivalDelayMs + idx * turnIntervalMs, () => {
+        if (this.isMeetingActive) return;
+        const skillPrefix = turn.skillUsed ? `${turn.skillUsed}: ` : '';
+        this.showSpeechBubble(turn.speakerId, `${skillPrefix}${turn.text}`, turnIntervalMs - 250);
+      });
+      this.peerTimers.push(timer);
+    });
+
+    // Conclude discussion and walk back to desks
+    const totalDurationMs = arrivalDelayMs + discussion.turns.length * turnIntervalMs + 400;
+    const endTimer = this.time.delayedCall(totalDurationMs, () => {
+      this.activePeerPair = null;
+      this.isPeerDiscussionPlaying = false;
+
+      if (!this.isMeetingActive) {
+        this.tweens.add({
+          targets: initiator.container,
+          x: initiator.profile.deskPosition.x,
+          y: initiator.profile.deskPosition.y - 12,
+          duration: 1350,
+          ease: 'Sine.easeInOut',
+        });
+
+        if (discussion.isLoungeBreak) {
+          this.tweens.add({
+            targets: target.container,
+            x: target.profile.deskPosition.x,
+            y: target.profile.deskPosition.y - 12,
+            duration: 1350,
+            ease: 'Sine.easeInOut',
+          });
+        }
+      }
+
+      this.updateAgentState(discussion.initiatorId, origInitiatorState);
+      this.updateAgentState(discussion.targetId, origTargetState);
+    });
+    this.peerTimers.push(endTimer);
   }
 
   // ==========================================
@@ -622,6 +867,10 @@ export class OfficeScene extends Phaser.Scene {
 
   public callMeeting(topic: string) {
     this.isMeetingActive = true;
+    this.clearActivePeerTimers();
+    this.activePeerPair = null;
+    this.isPeerDiscussionPlaying = false;
+
     // Animate all agents walking into the Boardroom
     this.agentsMap.forEach((agent) => {
       this.tweens.add({
@@ -680,19 +929,19 @@ export class OfficeScene extends Phaser.Scene {
       agent.speechBubble = undefined;
     }
 
-    const shortMsg = message.length > 42 ? `${message.slice(0, 42)}...` : message;
-    const bubble = this.add.container(agent.container.x, agent.container.y - 52);
+    const shortMsg = message.length > 56 ? `${message.slice(0, 56)}...` : message;
+    const bubble = this.add.container(agent.container.x, agent.container.y - 54);
     bubble.setDepth(12);
 
-    const width = Math.max(110, shortMsg.length * 5.2 + 18);
+    const width = Math.max(125, shortMsg.length * 5.1 + 22);
     const bg = this.add.graphics();
-    bg.fillStyle(0x0f172a, 0.95);
-    bg.fillRoundedRect(-width / 2, -13, width, 24, 6);
-    bg.lineStyle(1, Phaser.Display.Color.HexStringToColor(agent.profile.color).color, 0.9);
-    bg.strokeRoundedRect(-width / 2, -13, width, 24, 6);
+    bg.fillStyle(0x0f172a, 0.96);
+    bg.fillRoundedRect(-width / 2, -14, width, 26, 6);
+    bg.lineStyle(1.5, Phaser.Display.Color.HexStringToColor(agent.profile.color).color, 0.95);
+    bg.strokeRoundedRect(-width / 2, -14, width, 26, 6);
 
     const text = this.add.text(0, -1, shortMsg, {
-      fontSize: '9px',
+      fontSize: '9.5px',
       color: '#f8fafc',
       fontStyle: 'bold',
       fontFamily: 'sans-serif',
@@ -700,11 +949,13 @@ export class OfficeScene extends Phaser.Scene {
 
     bubble.add([bg, text]);
     agent.speechBubble = bubble;
+    agent.activeBubbleType = 'dialogue';
 
     this.time.delayedCall(durationMs, () => {
       if (agent.speechBubble === bubble) {
         bubble.destroy();
         agent.speechBubble = undefined;
+        agent.activeBubbleType = undefined;
       }
     });
   }

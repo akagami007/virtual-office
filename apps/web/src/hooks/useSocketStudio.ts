@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import {
+  AgentPeerDiscussion,
   AgentProfile,
   AgentRole,
   ApprovalGate,
+  AUTONOMOUS_PEER_DISCUSSIONS,
   ChatMessage,
   ClientToServerEvents,
   INITIAL_AGENTS_ROSTER,
@@ -25,6 +27,20 @@ export function useSocketStudio() {
   const [pendingApproval, setPendingApproval] = useState<ApprovalGate | null>(null);
   const [meetingTranscript, setMeetingTranscript] = useState<ChatMessage[]>([]);
   const [activeMeetingTopic, setActiveMeetingTopic] = useState<string | null>(null);
+  const [peerDiscussions, setPeerDiscussions] = useState<AgentPeerDiscussion[]>([
+    {
+      ...AUTONOMOUS_PEER_DISCUSSIONS[0],
+      id: 'disc-init-01',
+      startedAt: 'Baru saja',
+    },
+  ]);
+
+  const addPeerDiscussion = useCallback((discussion: AgentPeerDiscussion) => {
+    setPeerDiscussions((prev) => {
+      const filtered = prev.filter((d) => d.id !== discussion.id);
+      return [discussion, ...filtered].slice(0, 12);
+    });
+  }, []);
 
   useEffect(() => {
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SERVER_URL, {
@@ -54,6 +70,17 @@ export function useSocketStudio() {
       if (data.agents) setAgents(data.agents);
       if (data.tasks) setTasks(data.tasks);
       if (data.activeProject) setActiveProject(data.activeProject);
+    });
+
+    // Peer-to-peer discussion broadcast from backend
+    socket.on('office:peer_discussion', (discussion) => {
+      addPeerDiscussion(discussion);
+      if (typeof window !== 'undefined') {
+        const scene = (window as any).__NEXUS_SCENE__;
+        if (scene && typeof scene.playPeerDiscussion === 'function') {
+          scene.playPeerDiscussion(discussion, true);
+        }
+      }
     });
 
     // Agent status updates
@@ -116,7 +143,7 @@ export function useSocketStudio() {
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [addPeerDiscussion]);
 
   const sendPlayerMove = useCallback((pos: { x: number; y: number; direction: string }) => {
     if (socketRef.current?.connected) {
@@ -162,6 +189,8 @@ export function useSocketStudio() {
     pendingApproval,
     meetingTranscript,
     activeMeetingTopic,
+    peerDiscussions,
+    addPeerDiscussion,
     sendPlayerMove,
     callMeeting,
     sendMeetingMessage,

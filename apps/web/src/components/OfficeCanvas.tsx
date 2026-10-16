@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import * as Phaser from 'phaser';
 import { createPhaserConfig } from '../phaser/config';
 import { OfficeScene, SceneCallbacks } from '../phaser/scenes/OfficeScene';
-import { AgentProfile, RoomZone } from '@nexusdev/shared';
+import { AgentPeerDiscussion, AgentProfile, RoomZone } from '@nexusdev/shared';
 
 // Safe monkey-patch for AudioContext.prototype.suspend to guard against closed context suspensions
 if (typeof window !== 'undefined') {
@@ -29,6 +29,7 @@ interface OfficeCanvasProps {
   onRoomEnter: (room: RoomZone) => void;
   onPlayerMove?: (pos: { x: number; y: number }) => void;
   onMeetingTriggered?: (topic: string) => void;
+  onPeerDiscussionStarted?: (discussion: AgentPeerDiscussion) => void;
 }
 
 export default function OfficeCanvas({
@@ -36,6 +37,7 @@ export default function OfficeCanvas({
   onRoomEnter,
   onPlayerMove,
   onMeetingTriggered,
+  onPeerDiscussionStarted,
 }: OfficeCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -44,6 +46,7 @@ export default function OfficeCanvas({
     onRoomEnter,
     onPlayerMove,
     onMeetingTriggered,
+    onPeerDiscussionStarted,
   });
 
   // Keep latest callbacks updated in ref and propagate to active scene
@@ -53,6 +56,7 @@ export default function OfficeCanvas({
       onRoomEnter,
       onPlayerMove,
       onMeetingTriggered,
+      onPeerDiscussionStarted,
     };
 
     if (gameRef.current) {
@@ -61,7 +65,7 @@ export default function OfficeCanvas({
         scene.setCallbacks(callbacksRef.current);
       }
     }
-  }, [onAgentClick, onRoomEnter, onPlayerMove, onMeetingTriggered]);
+  }, [onAgentClick, onRoomEnter, onPlayerMove, onMeetingTriggered, onPeerDiscussionStarted]);
 
   // Initialize Phaser Game instance ONCE on mount
   useEffect(() => {

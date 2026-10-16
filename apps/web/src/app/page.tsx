@@ -10,14 +10,19 @@ import AgentRosterModal from '../components/AgentRosterModal';
 import WorkspaceExplorerModal from '../components/WorkspaceExplorerModal';
 import MobileSimulatorModal from '../components/MobileSimulatorModal';
 import QuickNavDock from '../components/QuickNavDock';
+import LiveOfficeFeedPanel from '../components/LiveOfficeFeedPanel';
 import {
+  AgentPeerDiscussion,
   AgentProfile,
+  AgentRole,
   INITIAL_AGENTS_ROSTER,
   RoomId,
   RoomZone,
 } from '@nexusdev/shared';
 import { OfficeScene } from '../phaser/scenes/OfficeScene';
 import { useSocketStudio } from '../hooks/useSocketStudio';
+
+const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000';
 
 // Dynamically import Phaser canvas with SSR disabled
 const OfficeCanvas = dynamic(() => import('../components/OfficeCanvas'), {
@@ -47,17 +52,18 @@ export default function StudioPage() {
   const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isMobileSimulatorOpen, setIsMobileSimulatorOpen] = useState(false);
+  const [isAutonomous, setIsAutonomous] = useState(true);
 
   // Real-time WebSocket connection to Backend Orchestrator
   const {
     isConnected,
     agents,
-    tasks,
     activeProject,
     pendingApproval,
+    peerDiscussions,
+    addPeerDiscussion,
     sendPlayerMove,
     callMeeting,
-    submitHITLDecision,
   } = useSocketStudio();
 
   // Helper to access scene bridge
@@ -102,6 +108,115 @@ export default function StudioPage() {
     [sendPlayerMove]
   );
 
+  const handlePeerDiscussionStarted = useCallback(
+    (discussion: AgentPeerDiscussion) => {
+      addPeerDiscussion(discussion);
+    },
+    [addPeerDiscussion]
+  );
+
+  const handleToggleAutonomous = useCallback((enabled: boolean) => {
+    setIsAutonomous(enabled);
+    const scene = getScene();
+    if (scene && typeof scene.setAutonomousEnabled === 'function') {
+      scene.setAutonomousEnabled(enabled);
+    }
+  }, []);
+
+  const handleTriggerRandomDiscussion = useCallback(() => {
+    const scene = getScene();
+    if (scene && typeof scene.triggerRandomPeerDiscussion === 'function') {
+      scene.triggerRandomPeerDiscussion();
+    }
+  }, []);
+
+  const handleTriggerCustomDiscussion = useCallback(
+    async (
+      initiatorId: AgentRole,
+      targetId: AgentRole,
+      topic?: string,
+      skillCommand?: string
+    ) => {
+      const initiator = INITIAL_AGENTS_ROSTER[initiatorId];
+      const target = INITIAL_AGENTS_ROSTER[targetId];
+      if (!initiator || !target) return;
+
+      const resolvedSkill = skillCommand || initiator.skills[0] || '/code-review-and-quality';
+      const targetSkill = target.skills[0] || '/api-and-interface-design';
+      const resolvedTopic =
+        topic || `Sinkronisasi ${resolvedSkill} antara ${initiator.name} & ${target.name}`;
+
+      try {
+        const res = await fetch(`${SERVER_URL}/api/office/collaborate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            initiatorId,
+            targetId,
+            topic: resolvedTopic,
+            skillCommand: resolvedSkill,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.discussion) {
+            addPeerDiscussion(data.discussion);
+            const scene = getScene();
+            if (scene && typeof scene.playPeerDiscussion === 'function') {
+              scene.playPeerDiscussion(data.discussion, true);
+            }
+            return;
+          }
+        }
+      } catch {
+        // Fallback to local instant discussion below
+      }
+
+      const fallbackDiscussion: AgentPeerDiscussion = {
+        id: `disc-custom-${Date.now()}`,
+        topic: resolvedTopic,
+        initiatorId,
+        targetId,
+        skillApplied: `${resolvedSkill} & ${targetSkill}`,
+        locationLabel: target.department,
+        startedAt: new Date().toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        turns: [
+          {
+            speakerId: initiatorId,
+            speakerName: initiator.name,
+            speakerColor: initiator.color,
+            skillUsed: resolvedSkill,
+            text: `Halo ${target.name.split(' ')[0]}, saya ke mejamu untuk menyelaraskan "${resolvedTopic}" memakai standar ${resolvedSkill}.`,
+          },
+          {
+            speakerId: targetId,
+            speakerName: target.name,
+            speakerColor: target.color,
+            skillUsed: targetSkill,
+            text: `Siap ${initiator.name.split(' ')[0]}! Dari sisi ${target.department}, saya pastikan kontrak & implementasinya patuh aturan ${targetSkill}.`,
+          },
+          {
+            speakerId: initiatorId,
+            speakerName: initiator.name,
+            speakerColor: initiator.color,
+            skillUsed: resolvedSkill,
+            text: `Mantap, kita langsung eksekusi di sprint aktif sekarang!`,
+          },
+        ],
+      };
+
+      addPeerDiscussion(fallbackDiscussion);
+      const scene = getScene();
+      if (scene && typeof scene.playPeerDiscussion === 'function') {
+        scene.playPeerDiscussion(fallbackDiscussion, true);
+      }
+    },
+    [addPeerDiscussion]
+  );
+
   const handleJumpToRoom = (roomId: RoomId) => {
     const scene = getScene();
     if (scene) {
@@ -112,7 +227,7 @@ export default function StudioPage() {
   const handleJumpToAgent = (agentId: string) => {
     const scene = getScene();
     if (scene) {
-      scene.jumpToAgent(agentId as any);
+      scene.jumpToAgent(agentId as AgentRole);
     }
   };
 
@@ -157,18 +272,33 @@ export default function StudioPage() {
         onRoomEnter={handleRoomEnter}
         onPlayerMove={handlePlayerMove}
         onMeetingTriggered={handleMeetingTriggered}
+        onPeerDiscussionStarted={handlePeerDiscussionStarted}
+      />
+
+      {/* 2.5 Live Office Peer-to-Peer Interaction Feed & Controls */}
+      <LiveOfficeFeedPanel
+        discussions={peerDiscussions}
+        isAutonomous={isAutonomous}
+        onToggleAutonomous={handleToggleAutonomous}
+        onTriggerRandomDiscussion={handleTriggerRandomDiscussion}
+        onTriggerCustomDiscussion={handleTriggerCustomDiscussion}
+        onSelectAgent={(agent) => setSelectedAgent(agent)}
+        onFocusPair={(agentId) => handleJumpToAgent(agentId)}
       />
 
       {/* 3. Quick Navigation Floating Dock */}
       <QuickNavDock onJumpToRoom={handleJumpToRoom} />
 
-      {/* 4. Inspector Drawer (Agent Details, Live Code, 1-on-1 Chat) */}
+      {/* 4. Inspector Drawer (Agent Details, Live Code, 1-on-1 Chat & Skill Inspector) */}
       {selectedAgent && (
         <InspectorDrawer
           agent={agents[selectedAgent.id] || selectedAgent}
           onClose={() => setSelectedAgent(null)}
           onJumpToDesk={handleJumpToAgent}
           onOpenMobileSimulator={() => setIsMobileSimulatorOpen(true)}
+          onTriggerSkillDiscussion={(initiatorId, targetId, topic, skillCommand) => {
+            handleTriggerCustomDiscussion(initiatorId, targetId, topic, skillCommand);
+          }}
         />
       )}
 

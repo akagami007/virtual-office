@@ -12,8 +12,18 @@ import {
   Clock,
   Compass,
   Smartphone,
+  Terminal,
+  Users,
+  FileCode2,
 } from 'lucide-react';
-import { AgentProfile, AgentRole, AgentState } from '@nexusdev/shared';
+import {
+  AGENT_SKILLS_REGISTRY,
+  AgentProfile,
+  AgentRole,
+  AgentSkillSpec,
+  AgentState,
+  INITIAL_AGENTS_ROSTER,
+} from '@nexusdev/shared';
 import { OfficeScene } from '../phaser/scenes/OfficeScene';
 
 const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:4000';
@@ -25,50 +35,71 @@ interface ChatMessageItem {
 }
 
 function getInitialGreeting(agent: AgentProfile): ChatMessageItem {
+  const skillsList = agent.skills.slice(0, 3).join(', ');
   if (agent.id === 'AGT-PA') {
     return {
       sender: agent.name,
-      text: 'Halo CEO! Saya Anggi, Personal Assistant Anda. Jadwal harian, agenda rapat lintas divisi, dan berkas briefing eksekutif sudah saya siapkan. Apa jadwal atau kebutuhan yang ingin Anda atur sekarang?',
+      text: `Halo CEO! Saya Anggi, Personal Assistant Anda (aktif dengan skill ${skillsList}). Jadwal harian, agenda rapat lintas divisi, dan berkas briefing eksekutif sudah saya siapkan. Apa jadwal atau kebutuhan yang ingin Anda atur sekarang?`,
       time: 'Baru saja',
     };
   }
   return {
     sender: agent.name,
-    text: `Halo CEO! Saya ${agent.name} (${agent.title}). Saat ini saya sedang fokus pada: "${agent.currentTask || 'tugas sprint aktif'}". Ada instruksi khusus untuk saya?`,
+    text: `Halo CEO! Saya ${agent.name} (${agent.title}). Saya telah dibekali modul skill ${skillsList} untuk mengeksekusi "${agent.currentTask || 'tugas sprint aktif'}". Klik salah satu badge /skill saya atau ketik instruksi di bawah!`,
     time: 'Baru saja',
   };
 }
 
 function generateRoleFallbackReply(agent: AgentProfile, prompt: string): string {
+  const primarySkill = agent.skills[0] || '/code-review-and-quality';
   switch (agent.id as AgentRole) {
     case 'AGT-PA':
-      return `Siap, CEO! Terkait permintaan Anda: "${prompt}"\n• Jadwal & kalender eksekutif Anda telah saya perbarui.\n• Undangan koordinasi dan dokumen briefing terkait sudah saya distribusikan ke kepala divisi.\n• Saya akan mengingatkan Anda 15 menit sebelum agenda dimulai. Ada kebutuhan lain yang perlu saya siapkan?`;
+      return `Siap, CEO! Menggunakan protokol ${primarySkill} terkait permintaan Anda: "${prompt}"\n• Jadwal & kalender eksekutif Anda telah saya perbarui.\n• Undangan koordinasi dan dokumen briefing terkait sudah saya distribusikan ke kepala divisi.\n• Saya akan mengingatkan Anda 15 menit sebelum agenda dimulai.`;
     case 'AGT-CTO':
-      return `Siap CEO. Terkait "${prompt}", saya akan mengevaluasi dampaknya terhadap arsitektur sistem, kontrak OpenAPI, dan keamanan TLS/Database sebelum memberikan sign-off teknis.`;
+      return `Siap CEO. Berdasarkan standar ${primarySkill} terkait "${prompt}", saya akan mengevaluasi dampaknya terhadap arsitektur sistem, kontrak OpenAPI, dan keamanan TLS/Database sebelum memberikan sign-off teknis.`;
     case 'AGT-PM':
-      return `Dicatat CEO! Permintaan "${prompt}" sudah saya pecah ke dalam Sprint Backlog dan saya sinkronkan dengan papan Kanban tim.`;
+      return `Dicatat CEO! Menggunakan ${primarySkill}, permintaan "${prompt}" sudah saya pecah ke dalam Sprint Backlog dengan acceptance criteria terukur dan saya sinkronkan ke papan Kanban.`;
     case 'AGT-UIUX':
-      return `Siap CEO! Untuk "${prompt}", saya sedang menyiapkan komponen design system, palet warna, dan wireframe responsifnya di Figma & Tailwind.`;
+      return `Siap CEO! Mengacu pada ${primarySkill} untuk "${prompt}", saya sedang menyiapkan komponen design system, kontras WCAG AA, dan wireframe bebas AI-slop di Figma & Tailwind.`;
     case 'AGT-FE':
-      return `Siap CEO! Saya akan mengimplementasikan "${prompt}" pada komponen Next.js App Router dengan optimasi rendering dan state yang bersih.`;
+      return `Siap CEO! Dengan pedoman ${primarySkill}, saya akan mengimplementasikan "${prompt}" pada komponen Next.js App Router dengan optimasi Core Web Vitals dan state yang bersih.`;
     case 'AGT-BE':
-      return `Siap CEO! Endpoint API, validasi skema, dan query database untuk "${prompt}" segera saya bangun dan uji.`;
+      return `Siap CEO! Sesuai kontrak ${primarySkill}, endpoint API, validasi skema Zod, dan query database untuk "${prompt}" segera saya bangun dan uji.`;
     case 'AGT-MOB':
-      return `Siap CEO! Fitur "${prompt}" segera saya integrasikan ke modul React Native Expo & Flutter agar berjalan mulus di iOS dan Android.`;
+      return `Siap CEO! Mengikuti aturan ${primarySkill}, fitur "${prompt}" segera saya integrasikan ke modul React Native Expo & Flutter dengan tap-target >= 44px di iOS dan Android.`;
     case 'AGT-QA':
-      return `Siap CEO! Saya akan menyusun skenario automated test Playwright & Jest untuk memverifikasi "${prompt}" bebas dari bug regresi.`;
+      return `Siap CEO! Menerapkan ${primarySkill}, saya akan menyusun skenario automated test Playwright & Jest untuk memverifikasi "${prompt}" bebas dari bug regresi.`;
     case 'AGT-OPS':
-      return `Siap CEO! Konfigurasi container Docker, pipeline CI/CD, dan monitoring untuk "${prompt}" segera saya terapkan di server.`;
+      return `Siap CEO! Menjalankan ${primarySkill}, konfigurasi container Docker, pipeline CI/CD, dan monitoring untuk "${prompt}" segera saya terapkan di server.`;
     default:
       return `Siap CEO! Instruksi "${prompt}" telah saya catat dan segera saya eksekusi.`;
   }
 }
+
+const DEFAULT_PEER_BY_ROLE: Record<AgentRole, AgentRole> = {
+  'USR-CEO': 'AGT-PA',
+  'AGT-CTO': 'AGT-BE',
+  'AGT-PM': 'AGT-PA',
+  'AGT-PA': 'AGT-PM',
+  'AGT-UIUX': 'AGT-FE',
+  'AGT-FE': 'AGT-UIUX',
+  'AGT-BE': 'AGT-OPS',
+  'AGT-MOB': 'AGT-BE',
+  'AGT-QA': 'AGT-FE',
+  'AGT-OPS': 'AGT-BE',
+};
 
 interface InspectorDrawerProps {
   agent: AgentProfile | null;
   onClose: () => void;
   onJumpToDesk: (agentId: string) => void;
   onOpenMobileSimulator?: () => void;
+  onTriggerSkillDiscussion?: (
+    initiatorId: AgentRole,
+    targetId: AgentRole,
+    topic: string,
+    skillCommand: string
+  ) => void;
 }
 
 export default function InspectorDrawer({
@@ -76,14 +107,18 @@ export default function InspectorDrawer({
   onClose,
   onJumpToDesk,
   onOpenMobileSimulator,
+  onTriggerSkillDiscussion,
 }: InspectorDrawerProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'code' | 'chat'>('profile');
   const [chatInput, setChatInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [messagesByAgent, setMessagesByAgent] = useState<Record<string, ChatMessageItem[]>>({});
+  const [selectedSkill, setSelectedSkill] = useState<AgentSkillSpec | null>(null);
+  const [skillMarkdownExcerpt, setSkillMarkdownExcerpt] = useState<string | null>(null);
+  const [targetColleague, setTargetColleague] = useState<AgentRole>('AGT-BE');
   const chatInputRef = useRef<HTMLInputElement>(null);
 
-  // Ensure current agent has an initialized message thread
+  // Ensure current agent has an initialized message thread and default selected skill
   useEffect(() => {
     if (!agent) return;
     setMessagesByAgent((prev) => {
@@ -93,7 +128,39 @@ export default function InspectorDrawer({
         [agent.id]: [getInitialGreeting(agent)],
       };
     });
+
+    const roleSkills = AGENT_SKILLS_REGISTRY[agent.id] || [];
+    setSelectedSkill(roleSkills[0] || null);
+    setSkillMarkdownExcerpt(null);
+    setTargetColleague(DEFAULT_PEER_BY_ROLE[agent.id] || 'AGT-CTO');
   }, [agent]);
+
+  // Fetch real SKILL.md excerpt from backend when user inspects a skill badge
+  useEffect(() => {
+    if (!selectedSkill) return;
+    let cancelled = false;
+    setSkillMarkdownExcerpt(null);
+
+    fetch(`${SERVER_URL}/api/skills/${selectedSkill.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data || !data.rawMarkdown) return;
+        const cleaned = String(data.rawMarkdown)
+          .replace(/^---[\s\S]*?---\s*/, '')
+          .trim()
+          .slice(0, 520);
+        if (cleaned) {
+          setSkillMarkdownExcerpt(cleaned);
+        }
+      })
+      .catch(() => {
+        // Fallback uses selectedSkill.keyRules
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSkill]);
 
   // Auto-focus chat input when switching to 'chat' tab
   useEffect(() => {
@@ -108,6 +175,7 @@ export default function InspectorDrawer({
   if (!agent) return null;
 
   const currentMessages = messagesByAgent[agent.id] || [getInitialGreeting(agent)];
+  const roleSkillSpecs = AGENT_SKILLS_REGISTRY[agent.id] || [];
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,7 +200,10 @@ export default function InspectorDrawer({
       const res = await fetch(`${SERVER_URL}/api/agents/${agent.id}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: inputCopy }),
+        body: JSON.stringify({
+          message: inputCopy,
+          skillCommand: selectedSkill?.slashCommand,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -166,6 +237,22 @@ export default function InspectorDrawer({
     }
   };
 
+  const handleUseSkillInChat = (skill: AgentSkillSpec) => {
+    setSelectedSkill(skill);
+    setActiveTab('chat');
+    setChatInput(
+      `Gunakan skill ${skill.slashCommand} untuk meninjau & mengoptimalkan: ${
+        agent.currentTask || 'modul sprint aktif'
+      }`
+    );
+  };
+
+  const handleWalkAndDiscussSkill = (skill: AgentSkillSpec) => {
+    if (!onTriggerSkillDiscussion) return;
+    const topic = `Implementasi ${skill.slashCommand} (${skill.name})`;
+    onTriggerSkillDiscussion(agent.id, targetColleague, topic, skill.slashCommand);
+  };
+
   const getStatusColor = (state: AgentState) => {
     switch (state) {
       case 'CODING':
@@ -184,7 +271,7 @@ export default function InspectorDrawer({
   };
 
   return (
-    <aside className="fixed inset-y-0 right-0 z-30 w-full sm:w-[460px] bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/60 shadow-2xl flex flex-col transition-all animate-in slide-in-from-right duration-300">
+    <aside className="fixed inset-y-0 right-0 z-30 w-full sm:w-[480px] bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/60 shadow-2xl flex flex-col transition-all animate-in slide-in-from-right duration-300">
       {/* Header */}
       <div className="p-5 border-b border-slate-800 bg-slate-950/40 flex items-start justify-between">
         <div className="flex items-center gap-3.5">
@@ -234,7 +321,7 @@ export default function InspectorDrawer({
           }`}
         >
           <Zap className="w-3.5 h-3.5" />
-          <span>Profil & Skill</span>
+          <span>Profil & Agent Skills ({roleSkillSpecs.length})</span>
         </button>
 
         <button
@@ -279,7 +366,7 @@ export default function InspectorDrawer({
 
             {/* Bio */}
             <div>
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                 Deskripsi Tanggung Jawab
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed">
@@ -287,23 +374,154 @@ export default function InspectorDrawer({
               </p>
             </div>
 
-            {/* AI Skills Set */}
-            <div>
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Modul Skill AI Terpasang</span>
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {agent.skills.map((skill, idx) => (
-                  <span
-                    key={idx}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-800 text-slate-300 border border-slate-700/50"
-                  >
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    <span>{skill}</span>
-                  </span>
-                ))}
+            {/* Interactive Local Agent Skills Set */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Agent Skills Terpasang (Klik untuk Inspeksi)</span>
+                </h3>
+                <span className="text-[10px] font-mono text-indigo-400">
+                  SKILL.md Aktif
+                </span>
               </div>
+
+              <div className="flex flex-wrap gap-2">
+                {roleSkillSpecs.length > 0
+                  ? roleSkillSpecs.map((spec) => {
+                      const isSelected = selectedSkill?.id === spec.id;
+                      return (
+                        <button
+                          key={spec.id}
+                          type="button"
+                          onClick={() => setSelectedSkill(spec)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono font-semibold rounded-xl border transition-all ${
+                            isSelected
+                              ? 'bg-indigo-600/25 text-indigo-200 border-indigo-500 shadow-md shadow-indigo-500/10'
+                              : 'bg-slate-800/90 text-slate-300 border-slate-700/70 hover:border-slate-500 hover:text-white'
+                          }`}
+                        >
+                          <Terminal className="w-3 h-3 text-emerald-400" />
+                          <span>{spec.slashCommand}</span>
+                        </button>
+                      );
+                    })
+                  : agent.skills.map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-800 text-slate-300 border border-slate-700/50"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <span>{skill}</span>
+                      </span>
+                    ))}
+              </div>
+
+              {/* Selected Skill Inspector Card */}
+              {selectedSkill && (
+                <div className="p-4 rounded-2xl bg-slate-950/90 border border-indigo-500/40 space-y-3 shadow-inner">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-bold text-emerald-400">
+                          {selectedSkill.slashCommand}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold">
+                          {selectedSkill.name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                        {selectedSkill.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* File Path Reference */}
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-800 truncate">
+                    <FileCode2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span className="truncate">{selectedSkill.skillPath}</span>
+                  </div>
+
+                  {/* Key Rules from SKILL.md */}
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Protokol & Aturan Utama Skill:
+                    </div>
+                    <ul className="space-y-1">
+                      {selectedSkill.keyRules.map((rule, idx) => (
+                        <li
+                          key={idx}
+                          className="flex items-start gap-1.5 text-[11px] text-slate-300"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{rule}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {skillMarkdownExcerpt && (
+                    <details className="text-[10px] text-slate-400 bg-slate-900/70 rounded-lg p-2 border border-slate-800">
+                      <summary className="cursor-pointer font-semibold text-indigo-300">
+                        Lihat Kutipan Langsung SKILL.md
+                      </summary>
+                      <pre className="mt-2 whitespace-pre-wrap font-mono text-[10px] text-slate-300 max-h-32 overflow-y-auto">
+                        {skillMarkdownExcerpt}...
+                      </pre>
+                    </details>
+                  )}
+
+                  {/* Skill Actions: 1-on-1 Chat OR Walk to Colleague's Desk */}
+                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => handleUseSkillInChat(selectedSkill)}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Gunakan {selectedSkill.slashCommand} di Chat 1-on-1</span>
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={targetColleague}
+                        onChange={(e) => setTargetColleague(e.target.value as AgentRole)}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-200 focus:outline-none focus:border-indigo-500"
+                      >
+                        {(
+                          [
+                            'AGT-CTO',
+                            'AGT-PM',
+                            'AGT-PA',
+                            'AGT-UIUX',
+                            'AGT-FE',
+                            'AGT-BE',
+                            'AGT-MOB',
+                            'AGT-QA',
+                            'AGT-OPS',
+                          ] as AgentRole[]
+                        )
+                          .filter((r) => r !== agent.id)
+                          .map((r) => (
+                            <option key={r} value={r}>
+                              Ke Meja {INITIAL_AGENTS_ROSTER[r].name}
+                            </option>
+                          ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => handleWalkAndDiscussSkill(selectedSkill)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold transition-all"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Jalan & Diskusikan Skill</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {agent.id === 'AGT-MOB' && onOpenMobileSimulator && (
@@ -336,6 +554,19 @@ export default function InspectorDrawer({
 
         {activeTab === 'chat' && (
           <div className="flex flex-col h-full space-y-3">
+            {/* Active Skill Indicator Pill inside Chat */}
+            {selectedSkill && (
+              <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-[11px]">
+                <span className="text-slate-300">
+                  Mode Skill Aktif:{' '}
+                  <strong className="font-mono text-emerald-400">
+                    {selectedSkill.slashCommand}
+                  </strong>
+                </span>
+                <span className="text-[10px] text-indigo-300">SKILL.md Context</span>
+              </div>
+            )}
+
             <div className="flex-1 space-y-3 overflow-y-auto max-h-[340px] pr-1">
               {currentMessages.map((msg, i) => (
                 <div
@@ -355,34 +586,29 @@ export default function InspectorDrawer({
               ))}
               {isSending && (
                 <div className="p-3 rounded-xl text-xs bg-slate-800/40 border border-slate-700/40 text-slate-400 mr-6 animate-pulse">
-                  {agent.name} sedang menyiapkan balasan...
+                  {agent.name} sedang menerapkan {selectedSkill?.slashCommand || 'skill'}...
                 </div>
               )}
             </div>
 
-            {/* Quick Prompt Suggestions */}
+            {/* Quick Skill & Prompt Suggestions */}
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {(agent.id === 'AGT-PA'
-                ? [
-                    'Atur jadwal rapat hari ini',
-                    'Siapkan briefing eksekutif',
-                    'Saring prioritas mendesak CEO',
-                  ]
-                : [
-                    'Laporkan progres modul saat ini',
-                    'Prioritaskan tugas sprint utama',
-                  ]
-              ).map((preset, idx) => (
+              {roleSkillSpecs.map((spec) => (
                 <button
-                  key={idx}
+                  key={spec.id}
                   type="button"
                   onClick={() => {
-                    setChatInput(preset);
+                    setSelectedSkill(spec);
+                    setChatInput(
+                      `Terapkan ${spec.slashCommand} untuk tugas: ${
+                        agent.currentTask || 'sprint saat ini'
+                      }`
+                    );
                     chatInputRef.current?.focus();
                   }}
-                  className="text-[10px] px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition-colors"
+                  className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 transition-colors"
                 >
-                  + {preset}
+                  ⚡ {spec.slashCommand}
                 </button>
               ))}
             </div>
@@ -395,7 +621,7 @@ export default function InspectorDrawer({
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.stopPropagation()}
                 onKeyUp={(e) => e.stopPropagation()}
-                placeholder={`Ketik pesan untuk ${agent.name} (bebas pakai huruf W, A, S, D)...`}
+                placeholder={`Ketik instruksi atau /skill untuk ${agent.name}...`}
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               <button
